@@ -236,5 +236,5 @@ fabric.properties
 .idea/caches/build_file_checksums.ser
 
 # Custom gitignore
-images/backup
+/images/backup/
 test.py
