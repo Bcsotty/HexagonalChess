@@ -1,6 +1,7 @@
 import os
 import pygame
 from PIL import Image
+from math import cos, sin, pi
 
 
 def load_image_from_disk(imagePath: str, scale=1.0):
@@ -25,6 +26,7 @@ def load_image_from_disk(imagePath: str, scale=1.0):
     return image
 
 
+# noinspection PyTypeChecker
 def get_piece_image(color: int, piece: str, scale=1.0):
     """
 
@@ -63,6 +65,15 @@ def get_piece_image(color: int, piece: str, scale=1.0):
 
     return image
 
+
+def draw_regular_polygon(surface, color, vertex_count, radius, position, width=0):
+    # from https://stackoverflow.com/a/57638991/12363073
+    n, r = vertex_count, radius
+    x, y = position
+    pygame.draw.polygon(surface, color, [
+        (x + r * cos(2 * pi * i / n), y + r * sin(2 * pi * i / n))
+        for i in range(n)
+    ], width)
 
 def pil_image_to_surface(pilImage):
     return pygame.image.fromstring(pilImage.tobytes(), pilImage.size, pilImage.mode).convert()
