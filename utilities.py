@@ -3,6 +3,10 @@ import pygame
 from PIL import Image
 from math import cos, sin, pi
 
+startX = 100
+startY = 250
+width = height = midY = 0
+
 
 def load_image_from_disk(imagePath: str, scale=1.0):
     """
@@ -75,5 +79,20 @@ def draw_regular_polygon(surface, color, vertex_count, radius, position, width=0
         for i in range(n)
     ], width)
 
+
 def pil_image_to_surface(pilImage):
     return pygame.image.fromstring(pilImage.tobytes(), pilImage.size, pilImage.mode).convert()
+
+
+def position_to_cartesian(position: str) -> (float, float):
+    file = position[0]
+    file_index = (ord(file) - 97)
+    rank = int(position[1:])
+
+    x = startX + 3 / 4 * width * file_index
+    if file_index < 6:
+        y = startY - height * (rank - 6) + height / 2 * file_index
+    else:
+        y = midY + height * (11 - rank) - height / 2 * (file_index - 5)
+
+    return x, y
