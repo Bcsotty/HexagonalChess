@@ -96,3 +96,29 @@ def position_to_cartesian(position: str) -> (float, float):
         y = midY + height * (11 - rank) - height / 2 * (file_index - 5)
 
     return x, y
+
+
+def position_to_axial(position: str):
+    file = position[0]
+    file_index = (ord(file) - 97)
+    rank = int(position[1:])
+
+    return -5 + file_index, 6 - rank
+
+
+def axial_round(point: (float, float)):
+    x, y = point
+    x_grid = round(x)
+    y_grid = round(y)
+
+    x -= x_grid
+    y -= y_grid
+
+    if abs(x) >= abs(y):
+        return x_grid + round(x + 0.5 * y), y_grid
+    else:
+        return x_grid, y_grid + round(y + 0.5 * x)
+
+
+def axial_to_cartesian(coordinates: (int, int)):
+    pass
