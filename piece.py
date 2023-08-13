@@ -78,7 +78,8 @@ class Piece(pygame.sprite.Sprite):
 
                         if self.did_en_passant:  # Hooray!
                             self.did_en_passant = False
-                            dead_pawn_axial = (axial[0], axial[1] + 1)
+                            additive = -1 if self.color == 0 else 1
+                            dead_pawn_axial = (axial[0], axial[1] + additive)
                             self.board.remove_piece(tiles.get(dead_pawn_axial).piece)
 
                         tile.piece = self
