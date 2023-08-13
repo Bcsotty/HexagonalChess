@@ -17,7 +17,7 @@ def game_loop() -> None:
     :return: None
     """
 
-    screen = pygame.display.set_mode((800, 900))
+    screen = pygame.display.set_mode((800, 800))
     clock = pygame.time.Clock()
 
     board = Board(screen, scale=0.75)

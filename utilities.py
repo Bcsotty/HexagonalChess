@@ -1,11 +1,13 @@
 import os
 import pygame
 from PIL import Image
-from math import cos, sin, pi
+from math import cos, sin, pi, sqrt
 
 startX = 100
 startY = 250
 width = height = midY = 0
+center = None
+scale = 1
 
 
 def load_image_from_disk(imagePath: str, scale=1.0):
@@ -85,9 +87,7 @@ def pil_image_to_surface(pilImage):
 
 
 def position_to_cartesian(position: str) -> (float, float):
-    file = position[0]
-    file_index = (ord(file) - 97)
-    rank = int(position[1:])
+    file_index, rank = position_to_rank_and_file(position)
 
     x = startX + 3 / 4 * width * file_index
     if file_index < 6:
@@ -98,12 +98,20 @@ def position_to_cartesian(position: str) -> (float, float):
     return x, y
 
 
-def position_to_axial(position: str):
+def position_to_rank_and_file(position: str) -> (int, int):
     file = position[0]
-    file_index = (ord(file) - 97)
+    file_index = ord(file) - 97
     rank = int(position[1:])
+    return file_index, rank
 
-    return -5 + file_index, 6 - rank
+
+def position_to_axial(position: str):
+    file_index, rank = position_to_rank_and_file(position)
+
+    x = -5 + file_index
+    y = 6 - rank if file_index < 6 else 6 - (file_index - 5) - rank
+
+    return x, y
 
 
 def axial_round(point: (float, float)):
@@ -120,5 +128,22 @@ def axial_round(point: (float, float)):
         return x_grid, y_grid + round(y + 0.5 * x)
 
 
+def pixel_to_axial(point: (float, float)):
+    x = point[0] - center[0]
+    y = point[1] - center[1]
+    q = (2 / 3 * x) / (50 * scale)
+    r = (-1 / 3 * x + sqrt(3) / 3 * y) / (50 * scale)
+    return axial_round((q, r))
+
+
 def axial_to_cartesian(coordinates: (int, int)):
     pass
+
+
+def clamp(value, add, maximum, minimum=0):
+    if value + add > maximum:
+        return maximum
+    if value + add < minimum:
+        return minimum
+
+    return value + add

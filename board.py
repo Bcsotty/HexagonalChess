@@ -8,7 +8,14 @@ from pygame.locals import *
 class Board:
 
     def __init__(self, surface, startX=100, startY=250, scale=1.0):
-        self.pieces = self.sprites = self.tiles = self.center = self.piece_selected = None
+        self.pieces = None
+        self.sprites = None
+        self.tiles = None
+        self.center = None
+        self.piece_selected = None
+        self.last_piece_moved = None
+        self.highlighted_tiles = []
+
         self.turn = 1
         self.surface = surface
         self.startX = startX
@@ -29,12 +36,13 @@ class Board:
         width = size * 2
         height = sqrt(3) * size
         midY = self.startY - height / 2 * 5
+        self.center = (self.startX + 3 / 4 * width * 5, self.startY - height / 2 * 5 + height * 5)
 
         utilities.width = width
         utilities.height = height
         utilities.midY = midY
-
-        self.center = (self.startX + 3 / 4 * width * 5, self.startY - height / 2 * 5 + height * 5)
+        utilities.center = self.center
+        utilities.scale = self.scale
 
         for i in range(11):
 
@@ -53,20 +61,30 @@ class Board:
 
                 if self.tiles is None:
                     self.tiles = {
-                        self.pixel_to_axial(tile.cartesian_coordinates): tile
+                        utilities.position_to_axial(tile.position): tile
                     }
                 else:
-                    self.tiles[self.pixel_to_axial(tile.cartesian_coordinates)] = tile
+                    self.tiles[utilities.position_to_axial(tile.position)] = tile
 
                 tile.draw_tile(self.surface)
 
     def setup_pieces(self, scale=1.0):
-        self.pieces = create_pieces(0, scale)
-        self.pieces.extend(create_pieces(1, scale))
+        self.pieces = create_pieces(0, self, scale)
+        self.pieces.extend(create_pieces(1, self, scale))
+
+        for piece in self.pieces:
+            axial = utilities.position_to_axial(piece.current_position)
+            tile = self.tiles.get(axial)
+            tile.piece = piece
         # noinspection PyTypeChecker
         self.sprites = pygame.sprite.Group(self.pieces)
 
     def add_piece(self, *pieces: Piece):
+        for piece in pieces:
+            axial = utilities.position_to_axial(piece.current_position)
+            tile = self.tiles.get(axial)
+            tile.piece = piece
+
         if self.pieces is None:
             self.pieces = [piece for piece in pieces]
             self.sprites = pygame.sprite.Group(self.pieces)
@@ -88,11 +106,31 @@ class Board:
             tile.draw_tile(self.surface)
 
     def generate_legal_moves(self):
-        pawn_moves = []
+        legal_moves = self.piece_selected.get_piece_moves(self.tiles)
 
-        for piece in self.pieces:
-            if piece.name == "pawn":
-                pawn_moves.append(piece.get_piece_moves(self.tiles))
+        for tile in legal_moves:
+            highlight = (-255, 255, -255)
+
+            new_color = (utilities.clamp(highlight[0], tile.color.r, 255),
+                         utilities.clamp(highlight[1], tile.color.g, 255),
+                         utilities.clamp(highlight[2], tile.color.b, 255))
+
+            tile.apply_filter(pygame.color.Color(new_color[0], new_color[1], new_color[2]))
+
+        current_tile = self.tiles.get(utilities.position_to_axial(self.piece_selected.current_position))
+        current_tile.piece = self.piece_selected
+
+        current_tile.apply_filter(pygame.color.Color(255, 0, 0))
+
+        legal_moves.append(current_tile)
+
+        self.highlighted_tiles = legal_moves
+
+    def reset_highlighted_tiles(self):
+        for tile in self.highlighted_tiles:
+            tile.reset_filter()
+
+        self.highlighted_tiles = []
 
     def update(self, events) -> int:
         if self.sprites is None or self.pieces is None:
@@ -102,41 +140,50 @@ class Board:
             if event.type == MOUSEBUTTONDOWN:
                 if self.piece_selected is None:
                     for piece in self.pieces:
-                        self.piece_selected = piece.handle_event(event, self.tiles)
+                        if piece.color != self.turn:
+                            continue
+                        self.piece_selected = piece.handle_event(event)
                         if self.piece_selected is not None:
+                            self.generate_legal_moves()
                             break
-
-                if self.piece_selected is not None:
-                    self.generate_legal_moves()
 
             elif event.type == MOUSEBUTTONUP:
                 if self.piece_selected is not None:
                     for piece in self.pieces:
-                        piece.handle_event(event, self.tiles)
+                        valid_move = piece.handle_event(event)
+                        if valid_move:
+                            self.turn = 1 - self.turn
+                            self.last_piece_moved = self.piece_selected
+                            break
+
                     self.piece_selected = None
+                    self.reset_highlighted_tiles()
 
         self.sprites.update(self.tiles)
         self.update_board()
         self.sprites.draw(self.surface)
 
-    def pixel_to_axial(self, point: (float, float)):
-        x = point[0] - self.center[0]
-        y = point[1] - self.center[1]
-        q = (2 / 3 * x) / (50 * self.scale)
-        r = (-1 / 3 * x + sqrt(3) / 3 * y) / (50 * self.scale)
-        return utilities.axial_round((q, r))
+        return self.turn
+
+    def remove_piece(self, piece: Piece):
+        self.pieces.remove(piece)
+        self.sprites.remove(piece)
 
 
 class Tile:
-    def __init__(self, color: pygame.color.Color, position: str, coordinates: (float, float), size: float):
+    def __init__(self, color: pygame.color.Color, position: str, coordinates: (float, float), size: float, piece=None):
         self.color = color
+        self.displayed_color = color
         self.position = position
         self.cartesian_coordinates = coordinates
-
+        self.piece = piece
         self.size = size
 
-        self.bbox = pygame.rect.Rect(coordinates[0] - size / 2, coordinates[1] - sqrt(3) * size / 2, size, sqrt(3) *
-                                     size)
-
     def draw_tile(self, surface: pygame.surface.Surface):
-        utilities.draw_regular_polygon(surface, self.color, 6, self.size, self.cartesian_coordinates)
+        utilities.draw_regular_polygon(surface, self.displayed_color, 6, self.size, self.cartesian_coordinates)
+
+    def apply_filter(self, color: pygame.color.Color):
+        self.displayed_color = color
+
+    def reset_filter(self):
+        self.displayed_color = self.color
