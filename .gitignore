@@ -237,4 +237,5 @@ fabric.properties
 
 # Custom gitignore
 /images/backup/
-test.py
+src/test.py
+settings.pkl

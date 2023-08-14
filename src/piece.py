@@ -1,6 +1,6 @@
 import pygame
-from utilities import get_piece_image, position_to_cartesian, position_to_rank_and_file, position_to_axial, \
-    pixel_to_axial
+from utilities import get_piece_image, position_to_cartesian, position_to_file_and_rank
+from axial import position_to_axial, Axial, pixel_to_axial, axial_from_string
 from pygame.locals import *
 
 positions = {
@@ -41,7 +41,7 @@ class Piece(pygame.sprite.Sprite):
         self.current_position = position
         self.previous_position = position
         self.rect = self.image.get_rect()
-        self.rect.center = position_to_cartesian(position)
+        self.rect.center = position_to_cartesian(board, position)
         self.dragging = False
         self.did_en_passant = False  # It is a joyous occasion when this is true
         self.board = board
@@ -51,7 +51,7 @@ class Piece(pygame.sprite.Sprite):
             self.rect.center = pygame.mouse.get_pos()
 
             for axial, tile in tiles.items():
-                if pixel_to_axial(self.rect.center) == axial:
+                if pixel_to_axial(self.board, self.rect.center) == axial:
                     self.current_position = tile.position
                     break
 
@@ -68,8 +68,8 @@ class Piece(pygame.sprite.Sprite):
             if self.dragging:
                 found_tile = False
                 for axial, tile in tiles.items():
-                    if (pixel_to_axial(self.rect.center) == axial and tile in self.board.highlighted_tiles and
-                            tile.position != self.previous_position):
+                    if (pixel_to_axial(self.board, self.rect.center).to_string() == axial and
+                            tile in self.board.highlighted_tiles and tile.position != self.previous_position):
                         self.current_position = tile.position
                         self.rect.center = tile.cartesian_coordinates
 
@@ -79,20 +79,23 @@ class Piece(pygame.sprite.Sprite):
                         if self.did_en_passant:  # Hooray!
                             self.did_en_passant = False
                             additive = -1 if self.color == 0 else 1
-                            dead_pawn_axial = (axial[0], axial[1] + additive)
-                            self.board.remove_piece(tiles.get(dead_pawn_axial).piece)
+                            int_axial = axial_from_string(axial)
+                            dead_pawn_axial = Axial(int_axial.q, int_axial.r + additive)
+                            dead_pawn_tile = tiles.get(dead_pawn_axial.to_string())
+                            self.board.remove_piece(dead_pawn_tile.piece)
+                            dead_pawn_tile.piece = None
 
                         tile.piece = self
                         found_tile = True
 
-                        old_tile = tiles.get(position_to_axial(self.previous_position))
+                        old_tile = tiles.get(position_to_axial(self.previous_position).to_string())
                         old_tile.piece = None
 
                         break
 
                 if not found_tile:
                     self.current_position = self.previous_position
-                    self.rect.center = position_to_cartesian(self.current_position)
+                    self.rect.center = position_to_cartesian(self.board, self.current_position)
 
                 self.dragging = False
                 return found_tile
@@ -127,9 +130,9 @@ class Piece(pygame.sprite.Sprite):
                         if vector[1] == -2:
                             continue
 
-                    new_axial = (axial[0] + vector[0] * color_scalar, axial[1] + vector[1] * color_scalar)
+                    new_axial = (axial.q + vector[0] * color_scalar, axial.r + vector[1] * color_scalar)
 
-                    tile = tiles.get(new_axial)
+                    tile = tiles.get(Axial(new_axial[0], new_axial[1]).to_string())
                     if tile is None:
                         continue
 
@@ -141,8 +144,8 @@ class Piece(pygame.sprite.Sprite):
                                 if piece_moved.previous_position in positions.get(str(piece_moved.color) + "pawn"):
                                     piece_axial = position_to_axial(piece_moved.current_position)
 
-                                    if (new_axial[0] == piece_axial[0]) and (
-                                            new_axial[1] + color_scalar == piece_axial[1]):
+                                    if (new_axial[0] == piece_axial.q) and (
+                                            new_axial[1] + color_scalar == piece_axial.r):
 
                                         self.did_en_passant = True  # This is where a steam achievement is added
                                         possible_moves.append(tile)
@@ -165,7 +168,7 @@ class Piece(pygame.sprite.Sprite):
         return legal_moves
 
 
-def create_pieces(color: int, board, scale=1.0) -> list[Piece]:
+def create_default_pieces(color: int, board, scale=1.0) -> list[Piece]:
     pieces = [Piece(color, "queen", positions.get(str(color) + "queen"), board, scale),
               Piece(color, "king", positions.get(str(color) + "king"), board, scale)]
 
