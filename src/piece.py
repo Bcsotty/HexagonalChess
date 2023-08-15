@@ -276,12 +276,12 @@ class King(Piece):
 
             tile = tiles.get(Axial(new_axial[0], new_axial[1]).to_string())
             if tile is None:
-                break
+                continue
 
             if tile.piece is not None:
                 if tile.piece.color != self.color:
                     possible_moves.append(tile)
-                break
+                continue
 
             possible_moves.append(tile)
 
@@ -295,14 +295,93 @@ class Rook(Piece):
         super().__init__(color, "rook", position, board, scale)
 
     def get_piece_moves(self, tiles: dict) -> list:
-        return []
+        legal_moves = []
+        possible_moves = []
+        axial = position_to_axial(self.current_position)
+
+        movement_vectors = [
+            (-1, 0),
+            (0, -1),
+            (1, -1),
+            (1, 0),
+            (0, 1),
+            (-1, 1),
+        ]
+
+        color_scalar = 1
+
+        if self.color == 0:
+            color_scalar = -1
+
+        for vector in movement_vectors:
+            i = 1
+            while True:
+                new_axial = (axial.q + vector[0] * color_scalar * i, axial.r + vector[1] * color_scalar * i)
+
+                tile = tiles.get(Axial(new_axial[0], new_axial[1]).to_string())
+                if tile is None:
+                    break
+
+                if tile.piece is not None:
+                    if tile.piece.color != self.color:
+                        possible_moves.append(tile)
+                    break
+
+                possible_moves.append(tile)
+                i += 1
+
+        for tile in possible_moves:  # Check for checkmates, etc. here
+            legal_moves.append(tile)
+
+        return legal_moves
 
 class Knight(Piece):
     def __init__(self, color: int, position: str, board, scale=1.0):
         super().__init__(color, "knight", position, board, scale)
 
     def get_piece_moves(self, tiles: dict) -> list:
-        return []
+        legal_moves = []
+        possible_moves = []
+        axial = position_to_axial(self.current_position)
+
+        movement_vectors = [
+            (-3, 1),
+            (-2, -1),
+            (-1, -2),
+            (1, -3),
+            (2, -3),
+            (3, -2),
+            (3, -1),
+            (2, 1),
+            (1, 2),
+            (-1, 3),
+            (-2, 3),
+            (-3, 2)
+        ]
+
+        color_scalar = 1
+
+        if self.color == 0:
+            color_scalar = -1
+
+        for vector in movement_vectors:
+            new_axial = (axial.q + vector[0] * color_scalar, axial.r + vector[1] * color_scalar)
+
+            tile = tiles.get(Axial(new_axial[0], new_axial[1]).to_string())
+            if tile is None:
+                continue
+
+            if tile.piece is not None:
+                if tile.piece.color != self.color:
+                    possible_moves.append(tile)
+                continue
+
+            possible_moves.append(tile)
+
+        for tile in possible_moves:  # Check for checkmates, etc. here
+            legal_moves.append(tile)
+
+        return legal_moves
 
 
 class Bishop(Piece):
@@ -310,7 +389,45 @@ class Bishop(Piece):
         super().__init__(color, "bishop", position, board, scale)
 
     def get_piece_moves(self, tiles: dict) -> list:
-        return []
+        legal_moves = []
+        possible_moves = []
+        axial = position_to_axial(self.current_position)
+
+        movement_vectors = [
+            (-2, 1),
+            (-1, -1),
+            (1, -2),
+            (2, -1),
+            (1, 1),
+            (-1, 2)
+        ]
+
+        color_scalar = 1
+
+        if self.color == 0:
+            color_scalar = -1
+
+        for vector in movement_vectors:
+            i = 1
+            while True:
+                new_axial = (axial.q + vector[0] * color_scalar * i, axial.r + vector[1] * color_scalar * i)
+
+                tile = tiles.get(Axial(new_axial[0], new_axial[1]).to_string())
+                if tile is None:
+                    break
+
+                if tile.piece is not None:
+                    if tile.piece.color != self.color:
+                        possible_moves.append(tile)
+                    break
+
+                possible_moves.append(tile)
+                i += 1
+
+        for tile in possible_moves:  # Check for checkmates, etc. here
+            legal_moves.append(tile)
+
+        return legal_moves
 
 
 def create_default_pieces(color: int, board, scale=1.0) -> list[Piece]:
