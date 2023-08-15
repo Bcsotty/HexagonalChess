@@ -5,12 +5,12 @@ import sys
 from math import sqrt
 import time
 
-from piece import Piece
+from piece import Piece, create_piece
 from utilities import draw_regular_polygon
 from board import Board, Tile
 from components import Button, Label, Dropdown
 from settings import Settings
-from axial import Axial, axial_from_string
+from axial import Axial, axial_from_string, pixel_to_axial
 from event_handler import EventHandler
 
 
@@ -70,7 +70,7 @@ def main_menu() -> None:
                             case "Play Game":
                                 game_loop(settings)
                             case "Test Mode":
-                                pass
+                                test_mode(settings)
 
         screen.fill(pygame.Color('grey'))
 
@@ -152,25 +152,20 @@ def game_loop(settings: Settings) -> None:
     screen = pygame.display.set_mode(settings.dimensions)
     clock = pygame.time.Clock()
 
-    #  Determining scale, x, and y for the board
-    scale = settings.dimensions[0] * 0.0009375
-    half_board_width = 50 * scale * 16 / 2
-    board_x = settings.dimensions[0] / 2 - half_board_width
-    board_y = (settings.dimensions[0] / 100 - 6) * 30 + 190
-
-    board = Board(screen, settings, scale=scale, startX=board_x, startY=board_y)
+    board = Board(screen, settings)
 
     font = pygame.font.Font(None, 36)
     turn_label = Label(settings.dimensions[0] / 2 - 112, 0, 200, 50, "White's turn")
 
-    mouse_button_down = EventHandler(MOUSEBUTTONDOWN, [])
-    mouse_button_up = EventHandler(MOUSEBUTTONUP, [])
-
-    board.add_event_handlers(mouse_button_up, mouse_button_down)
+    promotion_labels = [
+        Label(settings.dimensions[0] * 3 / 4 - 100, 0, 200, 50, "Choose a piece:"),
+        Label(settings.dimensions[0] * 3 / 4 - 75, 25, 200, 50, "q - Queen"),
+        Label(settings.dimensions[0] * 3 / 4 - 75, 50, 200, 50, "n - Knight"),
+        Label(settings.dimensions[0] * 3 / 4 - 75, 75, 200, 50, "r - Rook"),
+        Label(settings.dimensions[0] * 3 / 4 - 75, 100, 200, 50, "b - Bishop")
+    ]
 
     board.start_game()
-
-
 
     while True:
         events = pygame.event.get()
@@ -183,6 +178,10 @@ def game_loop(settings: Settings) -> None:
 
         turn_label.draw(screen, font, pygame.Color('white'))
 
+        if board.promotion_flag:
+            for label in promotion_labels:
+                label.draw(screen, font, pygame.Color('black'))
+
         board.update(events)
 
         if board.turn == 0:
@@ -193,6 +192,77 @@ def game_loop(settings: Settings) -> None:
         pygame.display.flip()
 
         clock.tick(60)
+
+
+def test_mode(settings: Settings) -> None:
+    screen = pygame.display.set_mode(settings.dimensions)
+
+    board = Board(screen, settings, True)
+
+    board.generate_blank_board()
+
+    board.add_event_handlers()
+
+    promotion_labels = [
+        Label(settings.dimensions[0] * 3 / 4 - 100, 0, 200, 50, "Choose a piece:"),
+        Label(settings.dimensions[0] * 3 / 4 - 75, 25, 200, 50, "q - Queen"),
+        Label(settings.dimensions[0] * 3 / 4 - 75, 50, 200, 50, "n - Knight"),
+        Label(settings.dimensions[0] * 3 / 4 - 75, 75, 200, 50, "r - Rook"),
+        Label(settings.dimensions[0] * 3 / 4 - 75, 100, 200, 50, "b - Bishop")
+    ]
+    font = pygame.font.Font(None, 36)
+
+    running = True
+    key_last_pressed = 0.
+    while running:
+        events = pygame.event.get()
+        keys = pygame.key.get_pressed()
+
+        for event in events:
+            if event.type == QUIT:
+                pygame.quit()
+                sys.exit()
+
+        piece_color = 1
+        if keys[K_LSHIFT] or keys[K_RSHIFT]:
+            piece_color = 0
+
+        if time.time() - key_last_pressed > 1:
+            tile = board.tiles.get(pixel_to_axial(board, pygame.mouse.get_pos()).to_string())
+            if tile.piece is None:
+                if keys[K_p]:
+                    piece = create_piece(piece_color, "pawn", tile.position, board, board.piece_scale)
+                    board.add_piece(piece)
+                    key_last_pressed = time.time()
+                elif keys[K_b]:
+                    piece = create_piece(piece_color, "bishop", tile.position, board, board.piece_scale)
+                    board.add_piece(piece)
+                    key_last_pressed = time.time()
+                elif keys[K_n]:
+                    piece = create_piece(piece_color, "knight", tile.position, board, board.piece_scale)
+                    board.add_piece(piece)
+                    key_last_pressed = time.time()
+                elif keys[K_r]:
+                    piece = create_piece(piece_color, "rook", tile.position, board, board.piece_scale)
+                    board.add_piece(piece)
+                    key_last_pressed = time.time()
+                elif keys[K_q]:
+                    piece = create_piece(piece_color, "queen", tile.position, board, board.piece_scale)
+                    board.add_piece(piece)
+                    key_last_pressed = time.time()
+                elif keys[K_k]:
+                    piece = create_piece(piece_color, "king", tile.position, board, board.piece_scale)
+                    board.add_piece(piece)
+                    key_last_pressed = time.time()
+
+        screen.fill(pygame.Color('grey'))
+
+        if board.promotion_flag:
+            for label in promotion_labels:
+                label.draw(screen, font, pygame.Color('black'))
+
+        board.update(events)
+        pygame.display.flip()
 
 
 def test():

@@ -20,3 +20,5 @@ class EventHandler:
                 subscriber.mouse_button_down_handler(event)
             elif event.type == MOUSEBUTTONUP:
                 subscriber.mouse_button_up_handler(event)
+            elif event.type == KEYDOWN:
+                subscriber.key_pressed_handler(event)

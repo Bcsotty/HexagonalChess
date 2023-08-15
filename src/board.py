@@ -1,7 +1,7 @@
 import utilities
 import pygame
 from math import sqrt
-from piece import Piece, create_default_pieces
+from piece import Piece, create_default_pieces, create_piece
 from pygame.locals import *
 from settings import Settings
 from axial import Axial, position_to_axial
@@ -10,28 +10,34 @@ from event_handler import EventHandler
 
 class Board:
 
-    def __init__(self, surface: pygame.Surface, settings: Settings, startX=0, startY=0, scale=1.0):
+    def __init__(self, surface: pygame.Surface, settings: Settings, test_mode=False):
+        self.piece_scale: float = 0.
         self.event_handlers: list[EventHandler] | None = None
         self.tile_height = None
         self.tile_width = None
-        self.pieces = None
+        self.pieces: list[Piece] | None = None
         self.sprites = None
-        self.tiles = None
+        self.tiles: dict[str, Tile] | None = None
         self.center = None
-        self.piece_selected = None
-        self.last_piece_moved = None
+        self.piece_selected: Piece | None = None
+        self.last_piece_moved: Piece | None = None
+        self.midY = None
+        self.promotion_flag = False
         self.highlighted_tiles = []
+        self.test_mode = test_mode
 
         self.turn = 1
         self.settings = settings
         self.surface = surface
 
-        self.startX = startX
-        self.startY = startY
-        self.midY = None
-        self.scale = scale
+        #  Determining scale, x, and y for the board
+        self.scale = settings.dimensions[0] * 0.0009375
+        self.piece_scale = settings.dimensions[0] * 0.0006875
+        half_board_width = 50 * self.scale * 16 / 2
+        self.startX = settings.dimensions[0] / 2 - half_board_width
+        self.startY = (settings.dimensions[0] / 100 - 6) * 30 + 190
 
-    def generate_default_board(self):
+    def generate_blank_board(self):
         colors = {
             0: pygame.Color(255, 206, 158),
             1: pygame.Color(232, 171, 111),
@@ -83,8 +89,8 @@ class Board:
 
     def add_piece(self, *pieces: Piece):
         for piece in pieces:
-            axial = utilities.position_to_axial(piece.current_position)
-            tile = self.tiles.get(axial)
+            axial = position_to_axial(piece.current_position)
+            tile = self.tiles.get(axial.to_string())
             tile.piece = piece
 
         if self.pieces is None:
@@ -95,18 +101,19 @@ class Board:
             self.sprites.add(pieces)
 
     def start_game(self):
-        self.generate_default_board()
-        self.setup_pieces(self.settings.dimensions[0] * 0.0006875)
+        self.generate_blank_board()
+        self.setup_pieces(self.piece_scale)
+        self.add_event_handlers()
+
+    def add_event_handlers(self):
+        self.event_handlers = [
+            EventHandler(MOUSEBUTTONDOWN, []),
+            EventHandler(MOUSEBUTTONUP, []),
+            EventHandler(KEYDOWN, [])
+        ]
 
         for handler in self.event_handlers:
-            if handler.event_type == MOUSEBUTTONDOWN:
-                handler.add_subscriber(self)
-
-    def add_event_handlers(self, *event_handlers: EventHandler):
-        if not self.event_handlers:
-            self.event_handlers = [event_handler for event_handler in event_handlers]
-        else:
-            self.event_handlers.extend(event_handlers)
+            handler.add_subscriber(self)
 
     def update_board(self):
         # Precondition is that the tiles that are legal moves should already have color filter
@@ -145,60 +152,101 @@ class Board:
         self.highlighted_tiles = []
 
     def mouse_button_down_handler(self, event: pygame.event.Event):
+        if self.pieces is None:
+            return
+
         if self.piece_selected is None:
             for piece in self.pieces:
-                if piece.color != self.turn:
-                    continue
+                if not self.test_mode:
+                    if piece.color != self.turn:
+                        continue
 
-                self.piece_selected = piece.handle_event(event)
+                self.piece_selected = piece.mouse_button_down_handler(event)
 
                 if self.piece_selected is not None:
                     self.generate_legal_moves()
                     break
 
-    def update(self, events: list[pygame.event.Event]) -> None:
-        if self.sprites is None or self.pieces is None:
-            return
-
-
-        for event in events:
-            for event_handler in self.event_handlers:
-                if event.type == event_handler.event_type:
-                    event_handler.event_triggered(event)
+    def mouse_button_up_handler(self, event: pygame.event.Event):
+        if self.piece_selected is not None:
+            for piece in self.pieces:
+                valid_move = piece.mouse_button_up_handler(event)
+                if valid_move:
+                    self.turn = 1 - self.turn
+                    self.last_piece_moved = self.piece_selected
                     break
 
+            self.piece_selected = None
+            self.reset_highlighted_tiles()
 
-            if event.type == MOUSEBUTTONDOWN:
-                if self.piece_selected is None:
-                    for piece in self.pieces:
-                        if piece.color != self.turn:
-                            continue
-                        self.piece_selected = piece.handle_event(event)
-                        if self.piece_selected is not None:
-                            self.generate_legal_moves()
-                            break
+    def key_pressed_handler(self, event: pygame.event.Event):
+        if not self.promotion_flag:
+            return
 
-            elif event.type == MOUSEBUTTONUP:
-                if self.piece_selected is not None:
-                    for piece in self.pieces:
-                        valid_move = piece.handle_event(event)
-                        if valid_move:
-                            self.turn = 1 - self.turn
-                            self.last_piece_moved = self.piece_selected
-                            break
+        key = chr(event.key)
+        color = self.last_piece_moved.color
+        position = self.last_piece_moved.current_position
+        scale = self.piece_scale
 
-                    self.piece_selected = None
-                    self.reset_highlighted_tiles()
+        match key:
+            case "q":
+                piece = "queen"
 
-        self.sprites.update(self.tiles)
-        self.update_board()
-        self.sprites.draw(self.surface)
+            case "r":
+                piece = "rook"
 
-        return self.turn
+            case "b":
+                piece = "bishop"
+
+            case "n":
+                piece = "knight"
+
+            case _:
+                return
+
+        new_piece = create_piece(color, piece, position, self, scale)
+
+        tile = self.tiles.get(position_to_axial(position).to_string())
+        tile.piece = new_piece
+
+        self.pieces.remove(self.last_piece_moved)
+        self.sprites.remove(self.last_piece_moved)
+
+        self.pieces.append(new_piece)
+        self.sprites.add(new_piece)
+
+        self.promotion_flag = False
+
+    def update(self, events: list[pygame.event.Event]) -> None:
+        if self.promotion_flag:
+            for event in events:
+                if event.type == KEYDOWN:
+                    self.key_pressed_handler(event)
+
+        else:
+            for event in events:
+                for event_handler in self.event_handlers:
+                    if event.type == event_handler.event_type:
+                        event_handler.event_triggered(event)
+                        break
+
+        if self.sprites is not None:
+            self.sprites.update(self.tiles)
+            self.update_board()
+            self.sprites.draw(self.surface)
+        else:
+            self.update_board()
 
     def remove_piece(self, piece: Piece):
         self.pieces.remove(piece)
         self.sprites.remove(piece)
+
+    def promote_pawn(self, piece: Piece):
+        # Handles the promotion of a pawn. Need to prompt user for piece (simple form of add flag to update and add key
+        # handlers for the pieces) followed by creating the piece at the same location as the pawn, then remove the pawn
+        # from the tile, the pieces list, and the groups list
+        self.promotion_flag = True
+        pass
 
 
 class Tile:
