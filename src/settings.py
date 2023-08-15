@@ -5,6 +5,7 @@ class Settings:
     def __init__(self, file_path: str):
         self.file_path = file_path
         self.dimensions = (800, 800)
+        self.highlight = (-20, -20, 20)
         self.load_settings()
 
     def load_settings(self):
@@ -20,6 +21,3 @@ class Settings:
 
     def save_settings(self):
         save_object(self, self.file_path)
-
-    def set_window_dimensions(self, dimensions: (int, int)):
-        self.dimensions = dimensions

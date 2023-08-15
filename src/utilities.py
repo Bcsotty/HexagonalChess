@@ -82,7 +82,7 @@ def clamp(value, add, maximum, minimum=0):
     if value + add < minimum:
         return minimum
 
-    return value + add
+    return int(value + add)
 
 
 def save_object(obj: object, file_name: str):

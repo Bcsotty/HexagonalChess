@@ -124,11 +124,11 @@ class Board:
         for tile in self.tiles.values():
             tile.draw_tile(self.surface)
 
-    def generate_legal_moves(self):
+    def highlight_legal_moves(self):
         legal_moves = self.piece_selected.get_piece_moves(self.tiles)
 
         for tile in legal_moves:
-            highlight = (-255, 255, -255)
+            highlight = self.settings.highlight
 
             new_color = (utilities.clamp(highlight[0], tile.color.r, 255),
                          utilities.clamp(highlight[1], tile.color.g, 255),
@@ -139,7 +139,11 @@ class Board:
         current_tile = self.tiles.get(position_to_axial(self.piece_selected.current_position).to_string())
         current_tile.piece = self.piece_selected
 
-        current_tile.apply_filter(pygame.color.Color(255, 0, 0))
+        current_color = (utilities.clamp(100, current_tile.color.r, 255),
+                         utilities.clamp(-60, current_tile.color.g, 255),
+                         utilities.clamp(-60, current_tile.color.b, 255))
+
+        current_tile.apply_filter(pygame.color.Color(current_color[0], current_color[1], current_color[2]))
 
         legal_moves.append(current_tile)
 
@@ -164,7 +168,7 @@ class Board:
                 self.piece_selected = piece.mouse_button_down_handler(event)
 
                 if self.piece_selected is not None:
-                    self.generate_legal_moves()
+                    self.highlight_legal_moves()
                     break
 
     def mouse_button_up_handler(self, event: pygame.event.Event):

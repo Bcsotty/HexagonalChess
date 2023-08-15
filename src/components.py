@@ -68,3 +68,34 @@ class Dropdown:
                 pygame.draw.rect(screen, pygame.Color("black"), option_rect, 1)
                 option_text = font.render(option, True, text_color)
                 screen.blit(option_text, (option_rect.x + 10, option_rect.y + 15))
+
+
+class Slider:
+    def __init__(self, x, y, width, min_value: int, max_value: int, step_value=1.0):
+        self.knob_rect = None
+        self.rect = pygame.Rect(x, y, width, 10)
+        self.knob_radius = 10
+        self.min_value = min_value
+        self.max_value = max_value
+        self.step_value = step_value
+        self.value = min_value
+
+    def set_value(self, new_value):
+        self.value = max(self.min_value, min(new_value, self.max_value))
+
+    def update_value(self, mouse_x):
+        percentage = (mouse_x - self.rect.left) / self.rect.width
+        new_value = self.min_value + percentage * (self.max_value - self.min_value)
+        new_value = round(new_value / self.step_value) * self.step_value
+        self.set_value(new_value)
+
+    def draw(self, screen: pygame.Surface, font: pygame.font.Font, color: pygame.Color):
+        pygame.draw.rect(screen, color, self.rect)
+
+        knob_x = self.rect.left + (self.value - self.min_value) / (self.max_value - self.min_value) * self.rect.width
+        knob_center = (knob_x, self.rect.centery)
+        self.knob_rect = pygame.draw.circle(screen, pygame.Color('black'), knob_center, self.knob_radius)
+
+        text_surface = font.render(f"Value: {self.value}", True, pygame.Color('black'))
+        text_rect = text_surface.get_rect(midleft=(self.rect.right + 20, self.rect.centery))
+        screen.blit(text_surface, text_rect)

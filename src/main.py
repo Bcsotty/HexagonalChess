@@ -6,9 +6,9 @@ from math import sqrt
 import time
 
 from piece import Piece, create_piece
-from utilities import draw_regular_polygon
+from utilities import draw_regular_polygon, clamp
 from board import Board, Tile
-from components import Button, Label, Dropdown
+from components import Button, Label, Dropdown, Slider
 from settings import Settings
 from axial import Axial, axial_from_string, pixel_to_axial
 from event_handler import EventHandler
@@ -86,11 +86,41 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
     current_dimensions = settings.dimensions
     str_dimensions = str(current_dimensions[0]) + "x" + str(current_dimensions[1])
 
-    dropdown = Dropdown(current_dimensions[0] / 2 - 50, 100, 200, 50, ["600x600", "700x700","800x800"])
+    dropdown = Dropdown(current_dimensions[0] / 2 - 50, 0, 200, 50, ["600x600", "700x700","800x800"])
     dropdown.select_option(str_dimensions)
 
-    dropdown_label = Label(current_dimensions[0] / 2 - 200, 100, 100, 50, "Window Size")
+    dropdown_label = Label(current_dimensions[0] / 2 - 200, 0, 100, 50, "Window Size")
     font = pygame.font.Font(None, int(current_dimensions[1] / 100) * 8 // 2)
+
+    color_label = Label(current_dimensions[0] / 2 - 116, 200,
+                        100, 50, "Tile highlight settings (RGB)")
+    color_components = [
+        Slider(current_dimensions[0] / 2 - 150, 250, 255, -255, 255),
+        Slider(current_dimensions[0] / 2 - 150, 275, 255, -255, 255),
+        Slider(current_dimensions[0] / 2 - 150, 300, 255, -255, 255),
+    ]
+
+    colors = {
+        0: pygame.Color(255, 206, 158),
+        1: pygame.Color(232, 171, 111),
+        2: pygame.Color(209, 139, 71)
+    }
+
+    sample_tiles = []
+
+    size = 37.5
+    tile_width = size * 2
+    tile_height = sqrt(3) * size
+
+    for i in range(4):
+        if i < 2:
+            x = current_dimensions[0] / 2 - 250 + 3 / 4 * tile_width * 0
+        else:
+            x = current_dimensions[0] / 2 - 250 + 3 / 4 * tile_width * 1
+
+        y = 375 + tile_height * i if i < 2 else 375 + tile_height * (i - 2) - tile_height / 2
+
+        sample_tiles.append(Tile(colors.get(i % 3), str(i), (x, y), size))
 
     buttons = [
         Button(current_dimensions[0] / 2 + 25, current_dimensions[1] - 100, 200, 50,
@@ -98,6 +128,19 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
         Button(current_dimensions[0] / 2 - 225, current_dimensions[1] - 100, 200, 50,
                                "Cancel changes")
     ]
+
+    occupied_tile_sample = sample_tiles[-1]
+    occupied_color = (clamp(100, occupied_tile_sample.color.r, 255),
+                     clamp(-60, occupied_tile_sample.color.g, 255),
+                     clamp(-60, occupied_tile_sample.color.b, 255))
+    occupied_tile_sample.apply_filter(pygame.Color(occupied_color[0], occupied_color[1], occupied_color[2]))
+
+    dragging_slider = None
+
+    highlight = settings.highlight
+
+    for i, component in enumerate(color_components):
+        component.set_value(highlight[i])
 
     while True:
         for event in pygame.event.get():
@@ -123,13 +166,27 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
                                 new_dimensions_str = dropdown.selected_option
                                 new_dimensions = (int(new_dimensions_str[:3]), int(new_dimensions_str[4:]))
 
-                                settings.set_window_dimensions(new_dimensions)
+                                new_highlight = tuple(slider.value for slider in color_components)
+
+                                settings.highlight = new_highlight
+                                settings.dimensions = new_dimensions
                                 pygame.display.set_mode(new_dimensions)
 
                                 settings.save_settings()
                                 return True
                             case "Cancel changes":
                                 return False
+
+                for slider in color_components:
+                    if slider.knob_rect.collidepoint(mouse_pos):
+                        dragging_slider = slider
+                        slider.update_value(mouse_pos[0])
+
+            elif event.type == MOUSEBUTTONUP and event.button == 1:
+                dragging_slider = None
+            elif event.type == MOUSEMOTION and dragging_slider:
+                mouse_pos = pygame.mouse.get_pos()
+                dragging_slider.update_value(mouse_pos[0])
 
 
         screen.fill(pygame.Color("grey"))
@@ -138,6 +195,22 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
 
         for button in buttons:
             button.draw(screen, font)
+
+        color_label.draw(screen, font, pygame.Color('black'))
+        for component in color_components:
+            component.draw(screen, font, pygame.Color('white'))
+
+        for tile in sample_tiles:
+            tile.draw_tile(screen)
+
+            if tile == sample_tiles[-1]:
+                break
+
+            highlight = tuple(slider.value for slider in color_components)
+            new_color = (clamp(tile.color.r, highlight[0], 255),
+                         clamp(tile.color.g, highlight[1], 255),
+                         clamp(tile.color.b, highlight[2], 255))
+            tile.apply_filter(pygame.Color(new_color[0], new_color[1], new_color[2]))
 
         pygame.display.flip()
 
@@ -227,33 +300,34 @@ def test_mode(settings: Settings) -> None:
         if keys[K_LSHIFT] or keys[K_RSHIFT]:
             piece_color = 0
 
-        if time.time() - key_last_pressed > 1:
+        if time.time() - key_last_pressed > 0.25:
             tile = board.tiles.get(pixel_to_axial(board, pygame.mouse.get_pos()).to_string())
-            if tile.piece is None:
-                if keys[K_p]:
-                    piece = create_piece(piece_color, "pawn", tile.position, board, board.piece_scale)
-                    board.add_piece(piece)
-                    key_last_pressed = time.time()
-                elif keys[K_b]:
-                    piece = create_piece(piece_color, "bishop", tile.position, board, board.piece_scale)
-                    board.add_piece(piece)
-                    key_last_pressed = time.time()
-                elif keys[K_n]:
-                    piece = create_piece(piece_color, "knight", tile.position, board, board.piece_scale)
-                    board.add_piece(piece)
-                    key_last_pressed = time.time()
-                elif keys[K_r]:
-                    piece = create_piece(piece_color, "rook", tile.position, board, board.piece_scale)
-                    board.add_piece(piece)
-                    key_last_pressed = time.time()
-                elif keys[K_q]:
-                    piece = create_piece(piece_color, "queen", tile.position, board, board.piece_scale)
-                    board.add_piece(piece)
-                    key_last_pressed = time.time()
-                elif keys[K_k]:
-                    piece = create_piece(piece_color, "king", tile.position, board, board.piece_scale)
-                    board.add_piece(piece)
-                    key_last_pressed = time.time()
+            if tile is not None:
+                if tile.piece is None:
+                    if keys[K_p]:
+                        piece = create_piece(piece_color, "pawn", tile.position, board, board.piece_scale)
+                        board.add_piece(piece)
+                        key_last_pressed = time.time()
+                    elif keys[K_b]:
+                        piece = create_piece(piece_color, "bishop", tile.position, board, board.piece_scale)
+                        board.add_piece(piece)
+                        key_last_pressed = time.time()
+                    elif keys[K_n]:
+                        piece = create_piece(piece_color, "knight", tile.position, board, board.piece_scale)
+                        board.add_piece(piece)
+                        key_last_pressed = time.time()
+                    elif keys[K_r]:
+                        piece = create_piece(piece_color, "rook", tile.position, board, board.piece_scale)
+                        board.add_piece(piece)
+                        key_last_pressed = time.time()
+                    elif keys[K_q]:
+                        piece = create_piece(piece_color, "queen", tile.position, board, board.piece_scale)
+                        board.add_piece(piece)
+                        key_last_pressed = time.time()
+                    elif keys[K_k]:
+                        piece = create_piece(piece_color, "king", tile.position, board, board.piece_scale)
+                        board.add_piece(piece)
+                        key_last_pressed = time.time()
 
         screen.fill(pygame.Color('grey'))
 
@@ -265,38 +339,16 @@ def test_mode(settings: Settings) -> None:
         pygame.display.flip()
 
 
-def test():
-    pass
-
-
 if __name__ == '__main__':
     pygame.init()
     pygame.display.set_caption("Hexagonal Chess")
 
     main_menu()
-    # test()
 
     pygame.quit()
     sys.exit()
 
 '''
 TODO
- main.py
-  - Add settings menu. 
-  
-    - Screen size: Allow box only shape i.e. 600x600, 700x700, 800x800, 900x900. Figure out how the relationship between 
-    board scale, piece scale, and screen size. 
-    
-    - Color of occupied tile and color of possible move tiles
 
-  - Add normal mode and test mode in the main game loop. Normal mode is normal gameplay, while test mode doesn't have
-    turns so the user can move any color piece.
-    
-    - Test mode should also have options for the user to create new pieces on the board wherever they want
-      - Add text with letters signifying which piece. When corresponding letter is clicked, create that piece at the 
-        cursor if it is a valid tile
-
- board.py
- utilities.py
- piece.py
 '''
