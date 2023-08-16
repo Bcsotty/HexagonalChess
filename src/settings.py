@@ -1,4 +1,5 @@
 from utilities import load_object, save_object
+import os
 
 
 class Settings:
@@ -6,17 +7,18 @@ class Settings:
         self.file_path = file_path
         self.dimensions = (800, 800)
         self.highlight = (-20, -20, 20)
+        self.root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.load_settings()
 
     def load_settings(self):
-        previous_settings = load_object(self.file_path)
+        previous_settings = load_object(self.root_dir + "\\" + self.file_path)
         if previous_settings is not None:
             self.__dict__.update(previous_settings.__dict__)
         else:
             self.load_default_settings()
 
     def load_default_settings(self):
-        default_settings = load_object("default_settings.pkl")
+        default_settings = load_object(self.root_dir + "\default_settings.pkl")
         self.__dict__.update(default_settings.__dict__)
 
     def save_settings(self):
