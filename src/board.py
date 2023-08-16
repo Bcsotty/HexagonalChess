@@ -4,7 +4,7 @@ from math import sqrt
 from piece import Piece, create_default_pieces, create_piece, Pawn
 from pygame.locals import *
 from settings import Settings
-from axial import Axial, position_to_axial
+from axial import Axial, position_to_axial, axial_from_string
 from event_handler import EventHandler
 from copy import deepcopy, copy
 
@@ -127,6 +127,7 @@ class Board:
 
         piece_current_position = copy(piece.current_position)
         piece_rect_center = copy(piece.rect.center)
+        piece_en_passant_possible = False
         new_tile_piece = new_tile.piece
         if new_tile_piece is not None:
             new_tile_piece = new_tile_piece.__deepcopy__()
@@ -140,16 +141,17 @@ class Board:
             self.remove_piece(new_tile.piece)
 
         if type(piece) == Pawn:
+            piece_en_passant_possible = copy(piece.en_passant_possible)
             if piece.en_passant_possible:
                 piece.en_passant_possible = False
 
                 addition = -1 if piece.color == 0 else 1
-                pawn_axial = axial_from_string(tile_axial)
+                pawn_axial = axial_from_string(tile_axial.to_string())
                 pawn_axial.r = pawn_axial.r + addition
                 pawn_tile = tiles.get(pawn_axial.to_string())
 
                 if pawn_tile.piece is not None:
-                    if pawn_tile.piece.color != self.color and pawn_tile.piece.name == "pawn":
+                    if pawn_tile.piece.color != piece.color and pawn_tile.piece.name == "pawn":
                         dead_pawn_piece = pawn_tile.piece.__deepcopy__()
                         self.remove_piece(pawn_tile.piece)
                         pawn_tile.piece = None
@@ -171,6 +173,8 @@ class Board:
         if dead_pawn_piece is not None:
             self.add_piece(dead_pawn_piece)
 
+        piece.en_passant_possible = piece_en_passant_possible
+
         piece.rect.center = piece_rect_center
         piece.current_position = piece_current_position
 
@@ -184,6 +188,10 @@ class Board:
         king_axial = position_to_axial(king_tile.position)
 
         opponent_color = 1 - color
+
+        color_scalar = 1
+        if color == 0:
+            color_scalar = -1
 
         capture_vectors = {  # all possible piece movements for white. Multiply by -1 to get black
             "pawn": [
@@ -237,10 +245,14 @@ class Board:
         }
 
         for piece, vectors in capture_vectors.items():
-            if piece == "pawn" or piece == "knight":
+            if piece == "pawn" or piece == "knight" or piece == "king":
                 for vector in vectors:
                     new_tile_axial = deepcopy(king_axial)
-                    new_tile_axial.add_vector(vector)
+                    if piece == "pawn":
+                        new_tile_axial.add_vector((vector[0] * color_scalar, vector[1] * color_scalar))
+                    else:
+                        new_tile_axial.add_vector(vector)
+
                     tile = self.tiles.get(new_tile_axial.to_string())
 
                     if tile is None:
@@ -271,78 +283,6 @@ class Board:
 
         return False
 
-    def is_piece_pinned(self, piece: Piece) -> None | Piece:
-        tile_axial = position_to_axial(piece.current_position)
-        tile = self.tiles.get(tile_axial.to_string())
-
-        if tile is None:
-            return None
-
-        opposite_color = 1 - piece.color
-
-        king_tile = self.get_king_tile(piece.color)
-
-        if king_tile is None:
-            return None
-
-        movement_vectors = [
-            # Rook/Queen
-            (-1, 0),
-            (0, -1),
-            (1, -1),
-            (1, 0),
-            (0, 1),
-            (-1, 1),
-
-            # Bishop/Queen
-            (-1, -1),
-            (-1, 2),
-            (1, 1),
-            (1, -2),
-            (-2, 1),
-            (2, -1),
-        ]
-
-        for i, vector in enumerate(movement_vectors):
-            current_axial = Axial(tile_axial.q + vector[0], tile_axial.r + vector[1])
-            current_tile = self.tiles.get(current_axial.to_string())
-
-            while current_tile is not None:
-                current_piece: None | Piece = self.tiles.get(current_axial.to_string()).piece
-
-                if current_piece is not None:
-                    if current_piece.color == opposite_color:
-                        if i > 5:
-                            if current_piece.name == "bishop" or current_piece.name == "queen":
-                                if self.king_on_opposite(current_axial, vector, piece.color):
-                                    return current_piece
-                        else:
-                            if current_piece.name == "rook" or current_piece.name == "queen":
-                                if self.king_on_opposite(current_axial, vector, piece.color):
-                                    return current_piece
-
-                current_axial.add_vector((vector[0], vector[1]))
-                current_tile = self.tiles.get(current_axial.to_string())
-
-        return None
-
-    def king_on_opposite(self, current_axial: Axial, vector: (int, int), color: int) -> bool:
-        king_on_opposite = False
-        opposite_axial = Axial(current_axial.q + vector[0] * -1, current_axial.r + vector[1] * -1)
-        opposite_tile = self.tiles.get(opposite_axial.to_string())
-
-        while opposite_tile is not None:
-            if opposite_tile.piece is not None:
-                if opposite_tile.piece.color == color and opposite_tile.piece.name == "king":
-                    king_on_opposite = True
-                    break
-
-            opposite_axial.add_vector((vector[0] * -1, vector[1] * -1))
-            opposite_tile = self.tiles.get(opposite_axial.to_string())
-
-        if king_on_opposite:
-            return True
-
     def add_event_handlers(self):
         self.event_handlers = [
             EventHandler(MOUSEBUTTONDOWN, []),
@@ -351,7 +291,7 @@ class Board:
         ]
 
         for handler in self.event_handlers:
-            handler.add_subscriber(self)
+            handler.add_subscriber(self, 0.025)
 
     def update_board(self):
         # Precondition is that the tiles that are legal moves should already have color filter
@@ -362,8 +302,20 @@ class Board:
         for tile in self.tiles.values():
             tile.draw_tile(self.surface)
 
+    def get_legal_moves(self, piece: Piece):
+        return piece.get_piece_moves(self.tiles)
+
+    def get_all_legal_moves(self, color: int):
+        legal_moves = []
+
+        for piece in self.pieces:
+            if piece.color == color:
+                legal_moves.extend(self.get_legal_moves(piece))
+
+        return legal_moves
+
     def highlight_legal_moves(self):
-        legal_moves = self.piece_selected.get_piece_moves(self.tiles)
+        legal_moves = self.get_legal_moves(self.piece_selected)
 
         for tile in legal_moves:
             highlight = self.settings.highlight
@@ -385,13 +337,21 @@ class Board:
 
         legal_moves.append(current_tile)
 
-        self.highlighted_tiles = legal_moves
+        self.highlighted_tiles.extend(legal_moves)
 
     def reset_highlighted_tiles(self):
         for tile in self.highlighted_tiles:
             tile.reset_filter()
 
         self.highlighted_tiles = []
+
+    def highlight_king_tile(self):
+        king_tile = self.get_king_tile(1 - self.piece_selected.color)
+
+        new_color = pygame.Color(255, 30, 33)
+
+        king_tile.apply_filter(new_color)
+        self.highlighted_tiles.append(king_tile)
 
     def mouse_button_down_handler(self, event: pygame.event.Event):
         if self.pieces is None:
@@ -418,8 +378,12 @@ class Board:
                     self.last_piece_moved = self.piece_selected
                     break
 
-            self.piece_selected = None
+            self.in_check = self.team_in_check(1 - self.piece_selected.color)
             self.reset_highlighted_tiles()
+            if self.in_check:
+                self.highlight_king_tile()
+
+            self.piece_selected = None
 
     def key_pressed_handler(self, event: pygame.event.Event):
         if not self.promotion_flag:
@@ -460,7 +424,14 @@ class Board:
         self.promotion_flag = False
 
     def update(self, events: list[pygame.event.Event]) -> None:
-        if self.promotion_flag:
+        if self.in_check:
+            all_team_moves = self.get_all_legal_moves(1 - self.turn)
+            if len(all_team_moves) == 0:
+                print("CHECKMATE!")
+                pygame.quit()
+                sys.exit()
+
+        elif self.promotion_flag:
             for event in events:
                 if event.type == KEYDOWN:
                     self.key_pressed_handler(event)
