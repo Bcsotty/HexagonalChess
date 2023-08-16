@@ -350,5 +350,15 @@ if __name__ == '__main__':
 
 '''
 TODO
-
+ - Add check state to the board, add a validate_move to the piece class to check if the moves are are valid per the 
+   check state of the board, check video and wikipedia again for special rules to add such as castling?
+ 
+ - Check state
+  - Case 1: You move a piece and that piece was pinned, opening up checkmate.
+    (Set pinned pieces move list to only be taking the pinned piece, then you don't need to check for this when seeing
+     if we are in check)
+  - Case 2: You move a piece and that piece then threatens the other color king
+    (Check move set of moved piece. If the enemy king is on any of the tiles the piece can move to, then it is in check)
+  - Case 3: You move a piece and neither king is in check. 
+    (Default case)
 '''

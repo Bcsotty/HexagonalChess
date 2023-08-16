@@ -3,6 +3,7 @@ from utilities import get_piece_image, position_to_cartesian, position_to_file_a
 from axial import position_to_axial, Axial, pixel_to_axial, axial_from_string
 from pygame.locals import *
 from abc import abstractmethod, ABC
+from copy import copy
 
 positions = {
     "0queen": "e10",
@@ -108,9 +109,27 @@ class Piece(pygame.sprite.Sprite, ABC):
 
         return False
 
+    def is_legal_move(self, tile) -> bool:
+        # Check if the piece (self) moving to the tile is a legal move (moving piece doesn't put our king in check)
+        in_check = self.board.simulate_move(tile, self)
+        if in_check:
+            return False
+        return True
+
+    def configure_copy(self, piece_copy):
+        piece_copy.dragging = copy(self.dragging)
+        piece_copy.previous_position = copy(self.previous_position)
+        piece_copy.current_position = copy(self.current_position)
+        piece_copy.rect = copy(self.current_position)
+
     @abstractmethod
     def get_piece_moves(self, tiles: dict):
         pass
+
+    @abstractmethod
+    def __deepcopy__(self, memodict=None):
+        if memodict is None:
+            memodict = {}
 
 
 class Pawn(Piece):
@@ -174,7 +193,9 @@ class Pawn(Piece):
             possible_moves.append(tile)
 
         for tile in possible_moves:  # Check for checkmates, etc. here
-            legal_moves.append(tile)
+            legal_move = super().is_legal_move(tile)
+            if legal_move:
+                legal_moves.append(tile)
 
         return legal_moves
 
@@ -185,9 +206,18 @@ class Pawn(Piece):
             axial = position_to_axial(self.current_position)
             axial.r = axial.r - 1
             if self.board.tiles.get(axial.to_string()) is None:
-                self.board.promote_pawn(self)
+                self.board.promote_pawn()
 
         return valid_move
+
+    def __deepcopy__(self, memodict=None):
+        if memodict is None:
+            memodict = {}
+
+        piece_copy = Pawn(copy(self.color), copy(self.current_position), self.board)
+
+        super().configure_copy(piece_copy)
+        piece_copy.en_passant_possible = copy(self.en_passant_possible)
 
 
 class Queen(Piece):
@@ -237,9 +267,19 @@ class Queen(Piece):
                 i += 1
 
         for tile in possible_moves:  # Check for checkmates, etc. here
-            legal_moves.append(tile)
+            legal_move = super().is_legal_move(tile)
+            if legal_move:
+                legal_moves.append(tile)
 
         return legal_moves
+
+    def __deepcopy__(self, memodict=None):
+        if memodict is None:
+            memodict = {}
+
+        piece_copy = Queen(copy(self.color), copy(self.current_position), self.board)
+
+        super().configure_copy(piece_copy)
 
 
 class King(Piece):
@@ -286,9 +326,20 @@ class King(Piece):
             possible_moves.append(tile)
 
         for tile in possible_moves:  # Check for checkmates, etc. here
-            legal_moves.append(tile)
+            legal_move = super().is_legal_move(tile)
+            if legal_move:
+                legal_moves.append(tile)
 
         return legal_moves
+
+    def __deepcopy__(self, memodict=None):
+        if memodict is None:
+            memodict = {}
+
+        piece_copy = King(copy(self.color), copy(self.current_position), self.board)
+
+        super().configure_copy(piece_copy)
+
 
 class Rook(Piece):
     def __init__(self, color: int, position: str, board, scale=1.0):
@@ -331,9 +382,20 @@ class Rook(Piece):
                 i += 1
 
         for tile in possible_moves:  # Check for checkmates, etc. here
-            legal_moves.append(tile)
+            legal_move = super().is_legal_move(tile)
+            if legal_move:
+                legal_moves.append(tile)
 
         return legal_moves
+
+    def __deepcopy__(self, memodict=None):
+        if memodict is None:
+            memodict = {}
+
+        piece_copy = Rook(copy(self.color), copy(self.current_position), self.board)
+
+        super().configure_copy(piece_copy)
+
 
 class Knight(Piece):
     def __init__(self, color: int, position: str, board, scale=1.0):
@@ -379,9 +441,19 @@ class Knight(Piece):
             possible_moves.append(tile)
 
         for tile in possible_moves:  # Check for checkmates, etc. here
-            legal_moves.append(tile)
+            legal_move = super().is_legal_move(tile)
+            if legal_move:
+                legal_moves.append(tile)
 
         return legal_moves
+
+    def __deepcopy__(self, memodict=None):
+        if memodict is None:
+            memodict = {}
+
+        piece_copy = Knight(copy(self.color), copy(self.current_position), self.board)
+
+        super().configure_copy(piece_copy)
 
 
 class Bishop(Piece):
@@ -425,9 +497,19 @@ class Bishop(Piece):
                 i += 1
 
         for tile in possible_moves:  # Check for checkmates, etc. here
-            legal_moves.append(tile)
+            legal_move = super().is_legal_move(tile)
+            if legal_move:
+                legal_moves.append(tile)
 
         return legal_moves
+
+    def __deepcopy__(self, memodict=None):
+        if memodict is None:
+            memodict = {}
+
+        piece_copy = Bishop(copy(self.color), copy(self.current_position), self.board)
+
+        super().configure_copy(piece_copy)
 
 
 def create_default_pieces(color: int, board, scale=1.0) -> list[Piece]:

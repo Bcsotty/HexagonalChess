@@ -7,8 +7,12 @@ class Axial:
         self.q = q
         self.r = r
 
-    def to_string(self):
+    def to_string(self) -> str:
         return f"{self.q},{self.r}"
+
+    def add_vector(self, vector: (int, int)) -> None:
+        self.q += vector[0]
+        self.r += vector[1]
 
 
 def axial_from_string(string: str) -> Axial:
