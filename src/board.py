@@ -7,6 +7,7 @@ from settings import Settings
 from axial import Axial, position_to_axial, axial_from_string
 from event_handler import EventHandler
 from copy import deepcopy, copy
+import sys
 
 
 # noinspection PyTypeChecker
@@ -431,17 +432,16 @@ class Board:
                 pygame.quit()
                 sys.exit()
 
-        elif self.promotion_flag:
+        if self.promotion_flag:
             for event in events:
                 if event.type == KEYDOWN:
                     self.key_pressed_handler(event)
 
-        else:
-            for event in events:
-                for event_handler in self.event_handlers:
-                    if event.type == event_handler.event_type:
-                        event_handler.event_triggered(event)
-                        break
+        for event in events:
+            for event_handler in self.event_handlers:
+                if event.type == event_handler.event_type:
+                    event_handler.event_triggered(event)
+                    break
 
         if self.sprites is not None:
             self.sprites.update(self.tiles)
