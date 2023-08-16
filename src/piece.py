@@ -70,7 +70,8 @@ class Piece(pygame.sprite.Sprite, ABC):
 
             for tile_axial, tile in tiles.items():
                 if (pixel_to_axial(self.board, self.rect.center).to_string() == tile_axial and
-                        tile in self.board.highlighted_tiles and tile.position != self.previous_position):
+                        (tile in self.board.highlighted_tiles or self.board.test_mode) and
+                        tile.position != self.previous_position):
 
                     self.current_position = tile.position
                     self.rect.center = tile.cartesian_coordinates
@@ -120,14 +121,15 @@ class Piece(pygame.sprite.Sprite, ABC):
         piece_copy.dragging = copy(self.dragging)
         piece_copy.previous_position = copy(self.previous_position)
         piece_copy.current_position = copy(self.current_position)
-        piece_copy.rect = copy(self.current_position)
+        piece_copy.rect = copy(self.rect)
+        return piece_copy
 
     @abstractmethod
     def get_piece_moves(self, tiles: dict):
         pass
 
     @abstractmethod
-    def __deepcopy__(self, memodict=None):
+    def __deepcopy__(self, memodict=None, piece_copy=None):
         if memodict is None:
             memodict = {}
 
@@ -210,14 +212,14 @@ class Pawn(Piece):
 
         return valid_move
 
-    def __deepcopy__(self, memodict=None):
+    def __deepcopy__(self, memodict=None, piece_copy=None):
         if memodict is None:
             memodict = {}
 
-        piece_copy = Pawn(copy(self.color), copy(self.current_position), self.board)
+        piece_copy = Pawn(copy(self.color), copy(self.current_position), self.board, self.board.piece_scale)
 
-        super().configure_copy(piece_copy)
         piece_copy.en_passant_possible = copy(self.en_passant_possible)
+        return super().configure_copy(piece_copy=piece_copy)
 
 
 class Queen(Piece):
@@ -273,13 +275,13 @@ class Queen(Piece):
 
         return legal_moves
 
-    def __deepcopy__(self, memodict=None):
+    def __deepcopy__(self, memodict=None, piece_copy=None):
         if memodict is None:
             memodict = {}
 
-        piece_copy = Queen(copy(self.color), copy(self.current_position), self.board)
+        piece_copy = Queen(copy(self.color), copy(self.current_position), self.board, self.board.piece_scale)
 
-        super().configure_copy(piece_copy)
+        return super().configure_copy(piece_copy=piece_copy)
 
 
 class King(Piece):
@@ -332,13 +334,13 @@ class King(Piece):
 
         return legal_moves
 
-    def __deepcopy__(self, memodict=None):
+    def __deepcopy__(self, memodict=None, piece_copy=None):
         if memodict is None:
             memodict = {}
 
-        piece_copy = King(copy(self.color), copy(self.current_position), self.board)
+        piece_copy = King(copy(self.color), copy(self.current_position), self.board, self.board.piece_scale)
 
-        super().configure_copy(piece_copy)
+        return super().configure_copy(piece_copy=piece_copy)
 
 
 class Rook(Piece):
@@ -388,13 +390,13 @@ class Rook(Piece):
 
         return legal_moves
 
-    def __deepcopy__(self, memodict=None):
+    def __deepcopy__(self, memodict=None, piece_copy=None):
         if memodict is None:
             memodict = {}
 
-        piece_copy = Rook(copy(self.color), copy(self.current_position), self.board)
+        piece_copy = Rook(copy(self.color), copy(self.current_position), self.board, self.board.piece_scale)
 
-        super().configure_copy(piece_copy)
+        return super().configure_copy(piece_copy=piece_copy)
 
 
 class Knight(Piece):
@@ -447,13 +449,13 @@ class Knight(Piece):
 
         return legal_moves
 
-    def __deepcopy__(self, memodict=None):
+    def __deepcopy__(self, memodict=None, piece_copy=None):
         if memodict is None:
             memodict = {}
 
-        piece_copy = Knight(copy(self.color), copy(self.current_position), self.board)
+        piece_copy = Knight(copy(self.color), copy(self.current_position), self.board, self.board.piece_scale)
 
-        super().configure_copy(piece_copy)
+        return super().configure_copy(piece_copy=piece_copy)
 
 
 class Bishop(Piece):
@@ -503,13 +505,13 @@ class Bishop(Piece):
 
         return legal_moves
 
-    def __deepcopy__(self, memodict=None):
+    def __deepcopy__(self, memodict=None, piece_copy=None):
         if memodict is None:
             memodict = {}
 
-        piece_copy = Bishop(copy(self.color), copy(self.current_position), self.board)
+        piece_copy = Bishop(copy(self.color), copy(self.current_position), self.board, self.board.piece_scale)
 
-        super().configure_copy(piece_copy)
+        return super().configure_copy(piece_copy=piece_copy)
 
 
 def create_default_pieces(color: int, board, scale=1.0) -> list[Piece]:

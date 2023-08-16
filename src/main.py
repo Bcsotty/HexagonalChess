@@ -328,6 +328,12 @@ def test_mode(settings: Settings) -> None:
                         piece = create_piece(piece_color, "king", tile.position, board, board.piece_scale)
                         board.add_piece(piece)
                         key_last_pressed = time.time()
+                if keys[K_BACKSPACE]:
+                    mouse_axial = pixel_to_axial(board, pygame.mouse.get_pos())
+                    hovered_piece = board.tiles.get(mouse_axial.to_string()).piece
+                    if hovered_piece is not None:
+                        board.remove_piece(hovered_piece)
+                    key_last_pressed = time.time()
 
         screen.fill(pygame.Color('grey'))
 
@@ -350,15 +356,5 @@ if __name__ == '__main__':
 
 '''
 TODO
- - Add check state to the board, add a validate_move to the piece class to check if the moves are are valid per the 
-   check state of the board, check video and wikipedia again for special rules to add such as castling?
- 
- - Check state
-  - Case 1: You move a piece and that piece was pinned, opening up checkmate.
-    (Set pinned pieces move list to only be taking the pinned piece, then you don't need to check for this when seeing
-     if we are in check)
-  - Case 2: You move a piece and that piece then threatens the other color king
-    (Check move set of moved piece. If the enemy king is on any of the tiles the piece can move to, then it is in check)
-  - Case 3: You move a piece and neither king is in check. 
-    (Default case)
+
 '''

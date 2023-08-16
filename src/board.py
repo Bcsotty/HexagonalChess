@@ -127,7 +127,10 @@ class Board:
 
         piece_current_position = copy(piece.current_position)
         piece_rect_center = copy(piece.rect.center)
-        new_tile_piece = deepcopy(new_tile.piece)  # may need to add __deepcopy__ to piece again if this fails
+        new_tile_piece = new_tile.piece
+        if new_tile_piece is not None:
+            new_tile_piece = new_tile_piece.__deepcopy__()
+
         dead_pawn_piece = None
 
         piece.current_position = new_tile.position
@@ -147,10 +150,9 @@ class Board:
 
                 if pawn_tile.piece is not None:
                     if pawn_tile.piece.color != self.color and pawn_tile.piece.name == "pawn":
+                        dead_pawn_piece = pawn_tile.piece.__deepcopy__()
                         self.remove_piece(pawn_tile.piece)
                         pawn_tile.piece = None
-                        dead_pawn_piece = deepcopy(pawn_tile.piece)
-
 
         new_tile.piece = piece
 
@@ -162,6 +164,10 @@ class Board:
 
         old_tile.piece = piece
         new_tile.piece = new_tile_piece
+
+        if new_tile_piece is not None:
+            self.add_piece(new_tile_piece)
+
         if dead_pawn_piece is not None:
             self.add_piece(dead_pawn_piece)
 
@@ -172,6 +178,9 @@ class Board:
 
     def team_in_check(self, color: int) -> bool:
         king_tile = self.get_king_tile(color)
+        if king_tile is None:
+            return False
+
         king_axial = position_to_axial(king_tile.position)
 
         opponent_color = 1 - color
@@ -244,9 +253,10 @@ class Board:
                 for vector in vectors:
                     i = 1
                     while True:
-                        vector = (vector[0] * i, vector[1] * i)
+                        temp_vector = copy(vector)
+                        temp_vector = (temp_vector[0] * i, temp_vector[1] * i)
                         new_tile_axial = deepcopy(king_axial)
-                        new_tile_axial.add_vector(vector)
+                        new_tile_axial.add_vector(temp_vector)
 
                         tile = self.tiles.get(new_tile_axial.to_string())
                         if tile is None:
@@ -472,6 +482,11 @@ class Board:
     def remove_piece(self, piece: Piece):
         self.pieces.remove(piece)
         self.sprites.remove(piece)
+
+        for tile in self.tiles.values():
+            if tile.piece == piece:
+                tile.piece = None
+                break
 
     def promote_pawn(self):
         self.promotion_flag = True
