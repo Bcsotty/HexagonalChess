@@ -6,7 +6,8 @@ class Settings:
     def __init__(self, file_path: str):
         self.file_path = file_path
         self.dimensions = (800, 800)
-        self.highlight = (-20, -20, 20)
+        self.highlight = (-217, -55, -7)
+        self.text_color = (38, 28, 55)
         self.root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         self.load_settings()
 

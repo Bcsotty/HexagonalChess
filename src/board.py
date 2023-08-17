@@ -14,6 +14,7 @@ import sys
 class Board:
 
     def __init__(self, surface: pygame.Surface, settings: Settings, test_mode=False):
+        self.game_over = False
         self.piece_scale: float = 0.
         self.event_handlers: list[EventHandler] | None = None
         self.tile_height = None
@@ -428,9 +429,8 @@ class Board:
         if self.in_check:
             all_team_moves = self.get_all_legal_moves(1 - self.turn)
             if len(all_team_moves) == 0:
-                print("CHECKMATE!")
-                pygame.quit()
-                sys.exit()
+                self.game_over = True
+                return
 
         if self.promotion_flag:
             for event in events:
