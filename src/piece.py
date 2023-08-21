@@ -73,32 +73,8 @@ class Piece(pygame.sprite.Sprite, ABC):
                         (tile in self.board.highlighted_tiles or self.board.test_mode) and
                         tile.position != self.previous_position):
 
-                    self.current_position = tile.position
-                    self.rect.center = tile.cartesian_coordinates
-
-                    if tile.piece is not None:
-                        self.board.remove_piece(tile.piece)
-
-                    if type(self) == Pawn:
-                        if self.en_passant_possible:
-                            self.en_passant_possible = False
-
-                            addition = -1 if self.color == 0 else 1
-                            pawn_axial = axial_from_string(tile_axial)
-                            pawn_axial.r = pawn_axial.r + addition
-                            pawn_tile = tiles.get(pawn_axial.to_string())
-
-                            if pawn_tile.piece is not None:
-                                if pawn_tile.piece.color != self.color and pawn_tile.piece.name == "pawn":
-                                    self.board.remove_piece(pawn_tile.piece)
-                                    pawn_tile.piece = None
-
-                    tile.piece = self
+                    self.board.move_piece(tile, self)
                     found_tile = True
-
-                    old_tile = tiles.get(position_to_axial(self.previous_position).to_string())
-                    old_tile.piece = None
-
                     break
 
             if not found_tile:

@@ -207,6 +207,7 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
             if tile == sample_tiles[-1]:
                 break
 
+            highlight_rgb_picker.update_color()
             highlight = highlight_rgb_picker.color
             new_color = (clamp(tile.color.r, highlight[0], 255),
                          clamp(tile.color.g, highlight[1], 255),
@@ -240,11 +241,15 @@ def game_loop(settings: Settings) -> None:
     ]
 
     board.start_game()
+    sample_state = ['06050606', '07070706', '06060706', '08070806', '07060806', '09070906', '08060906', '10071006',
+                    '09061006', '09081106', '100611061']
+    # board.load_state(sample_state)
 
     while True:
         events = pygame.event.get()
         for event in events:
             if event.type == QUIT:
+                print(board.state)
                 pygame.quit()
                 sys.exit()
 
@@ -401,9 +406,7 @@ if __name__ == '__main__':
 
 '''
 TODO
- - Refactor the code. go through and see if we can replace duplicate code into methods
  - Add some form of notation to the board with save and load methods for placing the the pieces.
- - Add the ability to see from black perspective
  
  - Add server and client.
    - Server stores client information, the IP gets mapped to the users name in the settings. If left as default, then
@@ -420,4 +423,8 @@ TODO
    orient the board accordingly. When its the players turn they can play their move and it will get sent to the server.
    Once their turn is done, the client will wait for the server to respond with the next move and will display the other
    players turn.
+ 
+ - Add which color you are to the game screen (Low priority since it makes no difference until multiplayer is implemented)
+ - Add the ability to see from black perspective (Low priority since moving works as is)
+ - Refactor the code (at the end)
 '''

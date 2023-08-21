@@ -31,9 +31,11 @@ class Board:
         self.in_check = False
 
         self.turn = 1
+        self.move = 1
         self.settings = settings
         self.surface = surface
         self.test_mode = test_mode
+        self.state = []
 
         #  Determining scale, x, and y for the board
         self.scale = settings.dimensions[0] * 0.0009375
@@ -348,12 +350,18 @@ class Board:
         self.highlighted_tiles = []
 
     def highlight_king_tile(self):
-        king_tile = self.get_king_tile(1 - self.piece_selected.color)
-
         new_color = pygame.Color(255, 30, 33)
 
-        king_tile.apply_filter(new_color)
-        self.highlighted_tiles.append(king_tile)
+        king_tile = self.get_king_tile(self.turn)
+        if self.test_mode:
+            king_tiles = [self.get_king_tile(0), self.get_king_tile(1)]
+            for tile in king_tiles:
+                if tile is not None:
+                    tile.apply_filter(new_color)
+                    self.highlighted_tiles.append(tile)
+        else:
+            king_tile.apply_filter(new_color)
+            self.highlighted_tiles.append(king_tile)
 
     def mouse_button_down_handler(self, event: pygame.event.Event):
         if self.pieces is None:
@@ -376,11 +384,12 @@ class Board:
             for piece in self.pieces:
                 valid_move = piece.mouse_button_up_handler(event)
                 if valid_move:
-                    self.turn = 1 - self.turn
-                    self.last_piece_moved = self.piece_selected
                     break
 
-            self.in_check = self.team_in_check(1 - self.piece_selected.color)
+            self.in_check = self.team_in_check(self.turn)
+            if self.test_mode:
+                self.in_check = self.team_in_check(0) or self.team_in_check(1)
+
             self.reset_highlighted_tiles()
             if self.in_check:
                 self.highlight_king_tile()
@@ -392,9 +401,6 @@ class Board:
             return
 
         key = chr(event.key)
-        color = self.last_piece_moved.color
-        position = self.last_piece_moved.current_position
-        scale = self.piece_scale
 
         match key:
             case "q":
@@ -412,18 +418,146 @@ class Board:
             case _:
                 return
 
-        new_piece = create_piece(color, piece, position, self, scale)
+        new_piece = self.promote_piece(self.last_piece_moved, piece)
+        self.update_state()
+
+        self.last_piece_moved = new_piece
+        self.promotion_flag = False
+
+    def promote_piece(self, piece: Piece, new_piece_name: str):
+        # Promotes a piece in place.
+        color = piece.color
+        position = piece.current_position
+        scale = self.piece_scale
+
+        new_piece = create_piece(color, new_piece_name, position, self, scale)
 
         tile = self.tiles.get(position_to_axial(position).to_string())
         tile.piece = new_piece
 
-        self.pieces.remove(self.last_piece_moved)
-        self.sprites.remove(self.last_piece_moved)
+        self.remove_piece(piece)
+        self.add_piece(new_piece)
 
-        self.pieces.append(new_piece)
-        self.sprites.add(new_piece)
+        return new_piece
 
-        self.promotion_flag = False
+    def move_piece(self, tile, piece: Piece):
+        tiles = self.tiles
+        piece.current_position = tile.position
+        piece.rect.center = tile.cartesian_coordinates
+        tile_axial = position_to_axial(tile.position)
+
+        if tile.piece is not None:
+            self.remove_piece(tile.piece)
+
+        if type(piece) == Pawn:
+            if piece.en_passant_possible:
+                piece.en_passant_possible = False
+
+                addition = -1 if piece.color == 0 else 1
+                pawn_axial = axial_from_string(tile_axial.to_string())
+                pawn_axial.r = pawn_axial.r + addition
+                pawn_tile = tiles.get(pawn_axial.to_string())
+
+                if pawn_tile.piece is not None:
+                    if pawn_tile.piece.color != piece.color and pawn_tile.piece.name == "pawn":
+                        self.remove_piece(pawn_tile.piece)
+                        pawn_tile.piece = None
+
+        tile.piece = piece
+
+        old_tile = tiles.get(position_to_axial(piece.previous_position).to_string())
+        old_tile.piece = None
+
+        self.turn = 1 - self.turn
+        self.last_piece_moved = piece
+
+        if not self.promotion_flag:
+            self.update_state()
+
+        self.move += 0.5
+
+    def load_state(self, state: list[str]):
+        for move in state:
+            old_file_index = int(move[:2]) - 1
+            old_rank = int(move[2:4])
+            old_position = chr(old_file_index + 97) + str(old_rank)
+
+            new_file_index = int(move[4:6]) - 1
+            new_rank = int(move[6:8])
+            new_position = chr(new_file_index + 97) + str(new_rank)
+
+            old_tile = self.tiles.get(position_to_axial(old_position).to_string())
+            new_tile = self.tiles.get(position_to_axial(new_position).to_string())
+
+            piece = old_tile.piece
+            if len(move) == 9:
+                match move[8]:
+                    case "1":
+                        new_piece = "queen"
+                    case "2":
+                        new_piece = "rook"
+                    case "3":
+                        new_piece = "bishop"
+                    case "4":
+                        new_piece = "knight"
+                    case _:
+                        new_piece = None
+
+                piece = self.promote_piece(piece, new_piece)
+
+            if type(piece) is Pawn and new_file_index - old_file_index != 0:
+                piece.en_passant_possible = True
+
+            self.move_piece(new_tile, piece)
+            piece.previous_position = piece.current_position
+
+    def update_state(self):
+        if self.last_piece_moved is None:
+            return
+
+        notation = self.get_iccf_notation(self.last_piece_moved)
+        self.state.append(notation)
+
+    def get_iccf_notation(self, piece) -> str:
+        if piece.current_position == piece.previous_position:
+            return None
+
+        file_index, rank = utilities.position_to_file_and_rank(piece.current_position)
+        old_file_index, old_rank = utilities.position_to_file_and_rank(piece.previous_position)
+
+        notation = f"{old_file_index + 1:0>{2}}{old_rank:0>{2}}{file_index + 1:0>{2}}{rank:0>{2}}"
+        if self.promotion_flag:
+            tile = self.tiles.get(position_to_axial(piece.current_position).to_string())
+
+            number = 0
+            match tile.piece.name:
+                case "knight":
+                    number = 4
+                case "queen":
+                    number = 1
+                case "bishop":
+                    number = 3
+                case "rook":
+                    number = 2
+
+            notation += str(number)
+
+        return notation
+
+    def get_algebraic_notation(self, piece: Piece) -> str:
+        if piece.current_position == piece.previous_position:
+            return None
+
+        letter = ""
+        if piece.name == "king":
+            letter = "K"
+        elif piece.name == "knight":
+            letter = "N"
+        elif piece.name != "pawn":
+            letter = piece.name[0].upper()
+
+        move = int(self.move)
+        return str(move) + f". {letter}{piece.current_position}"
 
     def update(self, events: list[pygame.event.Event]) -> None:
         if self.in_check:
@@ -436,12 +570,12 @@ class Board:
             for event in events:
                 if event.type == KEYDOWN:
                     self.key_pressed_handler(event)
-
-        for event in events:
-            for event_handler in self.event_handlers:
-                if event.type == event_handler.event_type:
-                    event_handler.event_triggered(event)
-                    break
+        else:
+            for event in events:
+                for event_handler in self.event_handlers:
+                    if event.type == event_handler.event_type:
+                        event_handler.event_triggered(event)
+                        break
 
         if self.sprites is not None:
             self.sprites.update(self.tiles)
