@@ -386,10 +386,6 @@ class Board:
                 if valid_move:
                     break
 
-            self.in_check = self.team_in_check(self.turn)
-            if self.test_mode:
-                self.in_check = self.team_in_check(0) or self.team_in_check(1)
-
             self.reset_highlighted_tiles()
             if self.in_check:
                 self.highlight_king_tile()
@@ -471,6 +467,16 @@ class Board:
         self.turn = 1 - self.turn
         self.last_piece_moved = piece
 
+        self.in_check = self.team_in_check(self.turn)
+        if self.test_mode:
+            self.in_check = self.team_in_check(0) or self.team_in_check(1)
+
+        if self.in_check:
+            self.highlight_king_tile()
+            all_team_moves = self.get_all_legal_moves(self.turn)
+            if len(all_team_moves) == 0:
+                self.game_over = True
+
         if not self.promotion_flag:
             self.update_state()
 
@@ -510,6 +516,8 @@ class Board:
 
             self.move_piece(new_tile, piece)
             piece.previous_position = piece.current_position
+            if move != state[-1]:
+                self.reset_highlighted_tiles()
 
     def update_state(self):
         if self.last_piece_moved is None:
@@ -544,27 +552,9 @@ class Board:
 
         return notation
 
-    def get_algebraic_notation(self, piece: Piece) -> str:
-        if piece.current_position == piece.previous_position:
-            return None
-
-        letter = ""
-        if piece.name == "king":
-            letter = "K"
-        elif piece.name == "knight":
-            letter = "N"
-        elif piece.name != "pawn":
-            letter = piece.name[0].upper()
-
-        move = int(self.move)
-        return str(move) + f". {letter}{piece.current_position}"
-
     def update(self, events: list[pygame.event.Event]) -> None:
-        if self.in_check:
-            all_team_moves = self.get_all_legal_moves(1 - self.turn)
-            if len(all_team_moves) == 0:
-                self.game_over = True
-                return
+        if self.game_over:
+            return
 
         if self.promotion_flag:
             for event in events:

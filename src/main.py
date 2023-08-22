@@ -241,41 +241,47 @@ def game_loop(settings: Settings) -> None:
     ]
 
     board.start_game()
-    sample_state = ['06050606', '07070706', '06060706', '08070806', '07060806', '09070906', '08060906', '10071006',
-                    '09061006', '09081106', '100611061']
-    # board.load_state(sample_state)
+    sample_state = ['09010703', '06070606', '07040706', '06060705', '07030705', '07070706', '07050706', '07100808',
+                    '05040506', '04070406', '06030504', '03080707', '05010204', '02070206', '02040510', '02060205',
+                    '05100409', '03070306', '04090611', '03060305', '06110610']
 
-    while True:
-        events = pygame.event.get()
-        for event in events:
-            if event.type == QUIT:
+    board.load_state(sample_state)
+
+    try:
+        while True:
+            events = pygame.event.get()
+            for event in events:
+                if event.type == QUIT:
+                    print(board.state)
+                    pygame.quit()
+                    sys.exit()
+
+            screen.fill(pygame.Color('grey'))
+
+            turn_label.draw(screen, font, settings.text_color)
+
+            if board.promotion_flag:
+                for label in promotion_labels:
+                    label.draw(screen, font, settings.text_color)
+
+            board.update(events)
+
+            if board.turn == 0:
+                turn_label.set_text("Black's turn")
+            else:
+                turn_label.set_text("White's turn")
+
+            if board.game_over:
+                # Replace bool with whether we win according to the last piece played color being ours or enemy
+                game_over_screen(True, settings)
                 print(board.state)
-                pygame.quit()
-                sys.exit()
+                break
 
-        screen.fill(pygame.Color('grey'))
+            pygame.display.flip()
 
-        turn_label.draw(screen, font, settings.text_color)
-
-        if board.promotion_flag:
-            for label in promotion_labels:
-                label.draw(screen, font, settings.text_color)
-
-        board.update(events)
-
-        if board.turn == 0:
-            turn_label.set_text("Black's turn")
-        else:
-            turn_label.set_text("White's turn")
-
-        if board.game_over:
-            # Replace bool with whether we win according to the last piece played color being ours or enemy
-            game_over_screen(True, settings)
-            break
-
-        pygame.display.flip()
-
-        clock.tick(60)
+            clock.tick(60)
+    except ValueError:
+        print(board.state)
 
 
 def test_mode(settings: Settings) -> None:
