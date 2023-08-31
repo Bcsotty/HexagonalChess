@@ -1,4 +1,4 @@
-from utilities import load_object, save_object
+from .utilities import load_object, save_object
 import os
 
 
@@ -8,7 +8,7 @@ class Settings:
         self.dimensions = (800, 800)
         self.highlight = (-217, -55, -7)
         self.text_color = (38, 28, 55)
-        self.root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.load_settings()
 
     def load_settings(self):
@@ -23,4 +23,4 @@ class Settings:
         self.__dict__.update(default_settings.__dict__)
 
     def save_settings(self):
-        save_object(self, self.file_path)
+        save_object(self, self.root_dir + "\\" + self.file_path)

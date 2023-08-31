@@ -1,5 +1,4 @@
 import pygame
-from piece import Piece
 from pygame.locals import *
 from time import time
 

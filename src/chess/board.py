@@ -1,11 +1,11 @@
-import utilities
+import src.tools.utilities as utilities
 import pygame
 from math import sqrt
-from piece import Piece, create_default_pieces, create_piece, Pawn
+from src.chess.piece import Piece, create_default_pieces, create_piece, Pawn
 from pygame.locals import *
-from settings import Settings
-from axial import Axial, position_to_axial, axial_from_string
-from event_handler import EventHandler
+from src.tools.settings import Settings
+from src.tools.axial import Axial, position_to_axial, axial_from_string
+from src.tools.event_handler import EventHandler
 from copy import deepcopy, copy
 import sys
 
@@ -13,7 +13,7 @@ import sys
 # noinspection PyTypeChecker
 class Board:
 
-    def __init__(self, surface: pygame.Surface, settings: Settings, test_mode=False):
+    def __init__(self, surface: pygame.Surface | None, settings: Settings, test_mode=False):
         self.game_over = False
         self.piece_scale: float = 0.
         self.event_handlers: list[EventHandler] | None = None
@@ -483,6 +483,10 @@ class Board:
         self.move += 0.5
 
     def load_state(self, state: list[str]):
+        if self.state:
+            print("Cannot load state. Board not in default state")
+            return
+
         for move in state:
             old_file_index = int(move[:2]) - 1
             old_rank = int(move[2:4])
@@ -552,9 +556,33 @@ class Board:
 
         return notation
 
+    def reset_board(self):
+        self.game_over = False
+        self.event_handlers: list[EventHandler] | None = None
+        self.tile_height = None
+        self.tile_width = None
+        self.pieces: list[Piece] | None = None
+        self.sprites = None
+        self.tiles: dict[str, Tile] | None = None
+        self.center = None
+        self.piece_selected: Piece | None = None
+        self.last_piece_moved: Piece | None = None
+        self.midY = None
+        self.promotion_flag = False
+        self.highlighted_tiles = []
+        self.in_check = False
+
+        self.turn = 1
+        self.move = 1
+        self.state = []
+
+        self.start_game()
+
+
     def update(self, events: list[pygame.event.Event]) -> None:
         if self.game_over:
-            return
+            # return
+            self.reset_board()
 
         if self.promotion_flag:
             for event in events:

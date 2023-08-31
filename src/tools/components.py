@@ -1,5 +1,5 @@
 import pygame
-from utilities import clamp
+from src.tools.utilities import clamp
 
 
 class Button:

@@ -1,17 +1,16 @@
 import pygame
 from pygame.locals import *
-import os
 import sys
 from math import sqrt
 import time
 
-from piece import Piece, create_piece
-from utilities import draw_regular_polygon, clamp
-from board import Board, Tile
-from components import Button, Label, Dropdown, Slider, RGBPicker
-from settings import Settings
-from axial import Axial, axial_from_string, pixel_to_axial
-from event_handler import EventHandler
+from src.chess.piece import create_piece
+from src.tools.utilities import clamp
+from src.chess.board import Board, Tile
+from src.tools.components import Button, Label, Dropdown, RGBPicker
+from src.tools.settings import Settings
+from src.tools.axial import pixel_to_axial
+from src.network.client import Client
 
 
 def main_menu() -> None:
@@ -34,10 +33,11 @@ def main_menu() -> None:
     text_width = 200
 
     buttons = [
-        Button(x, y, text_width, 50, "Play Game"),
-        Button(x, y + 125, text_width, 50, "Test Mode"),
-        Button(x, y + 250, text_width, 50, "Settings"),
-        Button(x, y + 375, text_width, 50, "Quit Game"),
+        Button(x, y, text_width, 50, "Play Local"),
+        Button(x, y + 125, text_width, 50, "Play Multiplayer"),
+        Button(x, y + 250, text_width, 50, "Test Mode"),
+        Button(x, y + 375, text_width, 50, "Settings"),
+        Button(x, y + 500, text_width, 50, "Quit Game"),
     ]
     title = Label(x, 25, text_width, 50, "Hexagonal Chess")
 
@@ -67,10 +67,14 @@ def main_menu() -> None:
 
                                     title.rect.x = x
 
-                            case "Play Game":
+                            case "Play Local":
                                 game_loop(settings)
                             case "Test Mode":
                                 test_mode(settings)
+                            case "Play Multiplayer":
+                                connect_server_menu(settings)
+
+
 
         screen.fill(pygame.Color('grey'))
 
@@ -80,6 +84,10 @@ def main_menu() -> None:
         title.draw(screen, title_font, settings.text_color)
 
         pygame.display.flip()
+
+
+def connect_server_menu(settings: Settings):
+    pass
 
 
 def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
@@ -217,7 +225,7 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
         pygame.display.flip()
 
 
-def game_loop(settings: Settings) -> None:
+def game_loop(settings: Settings, client=None) -> None:
     """
     Main game loop
 
@@ -228,6 +236,12 @@ def game_loop(settings: Settings) -> None:
     clock = pygame.time.Clock()
 
     board = Board(screen, settings)
+    board.start_game()
+
+    sample_state = ['09010703', '06070606', '07040706', '06060705', '07030705', '07070706', '07050706', '07100808',
+                    '05040506', '04070406', '06030504', '03080707', '05010204', '02070206', '02040510', '02060205',
+                    '05100409', '03070306', '04090611', '03060305']  # , '06110610'
+    board.load_state(sample_state)
 
     font = pygame.font.Font(None, 36)
     turn_label = Label(settings.dimensions[0] / 2 - 112, 0, 200, 50, "White's turn")
@@ -239,13 +253,6 @@ def game_loop(settings: Settings) -> None:
         Label(settings.dimensions[0] * 3 / 4 - 75, 75, 200, 50, "r - Rook"),
         Label(settings.dimensions[0] * 3 / 4 - 75, 100, 200, 50, "b - Bishop")
     ]
-
-    board.start_game()
-    sample_state = ['09010703', '06070606', '07040706', '06060705', '07030705', '07070706', '07050706', '07100808',
-                    '05040506', '04070406', '06030504', '03080707', '05010204', '02070206', '02040510', '02060205',
-                    '05100409', '03070306', '04090611', '03060305', '06110610']
-
-    board.load_state(sample_state)
 
     try:
         while True:
@@ -273,8 +280,8 @@ def game_loop(settings: Settings) -> None:
 
             if board.game_over:
                 # Replace bool with whether we win according to the last piece played color being ours or enemy
+                if board.last_piece_moved.color == client
                 game_over_screen(True, settings)
-                print(board.state)
                 break
 
             pygame.display.flip()

@@ -1,4 +1,4 @@
-from utilities import position_to_file_and_rank
+from src.tools.utilities import position_to_file_and_rank
 from math import sqrt
 
 

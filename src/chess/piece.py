@@ -1,7 +1,6 @@
 import pygame
-from utilities import get_piece_image, position_to_cartesian, position_to_file_and_rank
-from axial import position_to_axial, Axial, pixel_to_axial, axial_from_string
-from pygame.locals import *
+from src.tools.utilities import get_piece_image, position_to_cartesian
+from src.tools.axial import position_to_axial, Axial, pixel_to_axial
 from abc import abstractmethod, ABC
 from copy import copy
 

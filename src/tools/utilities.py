@@ -29,7 +29,7 @@ def get_piece_image(color: int, piece: str, sprite_scale=1.0):
     if row is None:
         raise Exception("Piece not defined")
 
-    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     pieces = Image.open(root_dir + '/images/pieces.png')
 
     sprite_x = row * 100
