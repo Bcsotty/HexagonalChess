@@ -1,11 +1,12 @@
 import src.tools.utilities as utilities
 import pygame
 from math import sqrt
-from src.chess.piece import Piece, create_default_pieces, create_piece, Pawn
+from src.chess.piece import Piece, create_default_pieces, create_piece, Pawn, PygamePiece
 from pygame.locals import *
 from src.tools.settings import Settings
 from src.tools.axial import Axial, position_to_axial, axial_from_string
 from src.tools.event_handler import EventHandler
+from src.network.client import Client
 from copy import deepcopy, copy
 import sys
 
@@ -13,27 +14,23 @@ import sys
 # noinspection PyTypeChecker
 class Board:
 
-    def __init__(self, surface: pygame.Surface | None, settings: Settings, test_mode=False):
+    def __init__(self, settings: Settings, client: Client = None, test_mode=False):
         self.game_over = False
         self.piece_scale: float = 0.
-        self.event_handlers: list[EventHandler] | None = None
         self.tile_height = None
         self.tile_width = None
         self.pieces: list[Piece] | None = None
-        self.sprites = None
         self.tiles: dict[str, Tile] | None = None
         self.center = None
-        self.piece_selected: Piece | None = None
         self.last_piece_moved: Piece | None = None
         self.midY = None
         self.promotion_flag = False
-        self.highlighted_tiles = []
         self.in_check = False
+        self.client = client
 
         self.turn = 1
         self.move = 1
         self.settings = settings
-        self.surface = surface
         self.test_mode = test_mode
         self.state = []
 
@@ -81,8 +78,6 @@ class Board:
                 else:
                     self.tiles[position_to_axial(tile.position).to_string()] = tile
 
-                tile.draw_tile(self.surface)
-
     def setup_pieces(self, scale=1.0):
         self.pieces = create_default_pieces(0, self, scale)
         self.pieces.extend(create_default_pieces(1, self, scale))
@@ -92,8 +87,6 @@ class Board:
             tile = self.tiles.get(axial.to_string())
             tile.piece = piece
 
-        self.sprites = pygame.sprite.Group(self.pieces)
-
     def add_piece(self, *pieces: Piece):
         for piece in pieces:
             axial = position_to_axial(piece.current_position)
@@ -102,15 +95,12 @@ class Board:
 
         if self.pieces is None:
             self.pieces = [piece for piece in pieces]
-            self.sprites = pygame.sprite.Group(self.pieces)
         else:
             self.pieces.extend(pieces)
-            self.sprites.add(pieces)
 
     def start_game(self):
         self.generate_blank_board()
         self.setup_pieces(self.piece_scale)
-        self.add_event_handlers()
 
     def get_king_tile(self, color: int):
         king_tile = None
@@ -130,7 +120,6 @@ class Board:
         tile_axial = position_to_axial(new_tile.position)
 
         piece_current_position = copy(piece.current_position)
-        piece_rect_center = copy(piece.rect.center)
         piece_en_passant_possible = False
         new_tile_piece = new_tile.piece
         if new_tile_piece is not None:
@@ -139,7 +128,6 @@ class Board:
         dead_pawn_piece = None
 
         piece.current_position = new_tile.position
-        piece.rect.center = new_tile.cartesian_coordinates
 
         if new_tile.piece is not None:
             self.remove_piece(new_tile.piece)
@@ -179,7 +167,6 @@ class Board:
 
         piece.en_passant_possible = piece_en_passant_possible
 
-        piece.rect.center = piece_rect_center
         piece.current_position = piece_current_position
 
         return in_check
@@ -287,67 +274,14 @@ class Board:
 
         return False
 
-    def add_event_handlers(self):
-        self.event_handlers = [
-            EventHandler(MOUSEBUTTONDOWN, []),
-            EventHandler(MOUSEBUTTONUP, []),
-            EventHandler(KEYDOWN, [])
-        ]
-
-        for handler in self.event_handlers:
-            handler.add_subscriber(self, 0.025)
-
-    def update_board(self):
-        # Precondition is that the tiles that are legal moves should already have color filter
-        # applied
-        if self.tiles is None:
-            return
-
-        for tile in self.tiles.values():
-            tile.draw_tile(self.surface)
-
-    def get_legal_moves(self, piece: Piece):
-        return piece.get_piece_moves(self.tiles)
-
     def get_all_legal_moves(self, color: int):
         legal_moves = []
 
         for piece in self.pieces:
             if piece.color == color:
-                legal_moves.extend(self.get_legal_moves(piece))
+                legal_moves.extend(piece.get_piece_moves(self.tiles))
 
         return legal_moves
-
-    def highlight_legal_moves(self):
-        legal_moves = self.get_legal_moves(self.piece_selected)
-
-        for tile in legal_moves:
-            highlight = self.settings.highlight
-
-            new_color = (utilities.clamp(highlight[0], tile.color.r, 255),
-                         utilities.clamp(highlight[1], tile.color.g, 255),
-                         utilities.clamp(highlight[2], tile.color.b, 255))
-
-            tile.apply_filter(pygame.color.Color(new_color[0], new_color[1], new_color[2]))
-
-        current_tile = self.tiles.get(position_to_axial(self.piece_selected.current_position).to_string())
-        current_tile.piece = self.piece_selected
-
-        current_color = (utilities.clamp(100, current_tile.color.r, 255),
-                         utilities.clamp(-60, current_tile.color.g, 255),
-                         utilities.clamp(-60, current_tile.color.b, 255))
-
-        current_tile.apply_filter(pygame.color.Color(current_color[0], current_color[1], current_color[2]))
-
-        legal_moves.append(current_tile)
-
-        self.highlighted_tiles.extend(legal_moves)
-
-    def reset_highlighted_tiles(self):
-        for tile in self.highlighted_tiles:
-            tile.reset_filter()
-
-        self.highlighted_tiles = []
 
     def highlight_king_tile(self):
         new_color = pygame.Color(255, 30, 33)
@@ -358,70 +292,10 @@ class Board:
             for tile in king_tiles:
                 if tile is not None:
                     tile.apply_filter(new_color)
-                    self.highlighted_tiles.append(tile)
         else:
             king_tile.apply_filter(new_color)
-            self.highlighted_tiles.append(king_tile)
-
-    def mouse_button_down_handler(self, event: pygame.event.Event):
-        if self.pieces is None:
-            return
-
-        if self.piece_selected is None:
-            for piece in self.pieces:
-                if not self.test_mode:
-                    if piece.color != self.turn:
-                        continue
-
-                self.piece_selected = piece.mouse_button_down_handler(event)
-
-                if self.piece_selected is not None:
-                    self.highlight_legal_moves()
-                    break
-
-    def mouse_button_up_handler(self, event: pygame.event.Event):
-        if self.piece_selected is not None:
-            for piece in self.pieces:
-                valid_move = piece.mouse_button_up_handler(event)
-                if valid_move:
-                    break
-
-            self.reset_highlighted_tiles()
-            if self.in_check:
-                self.highlight_king_tile()
-
-            self.piece_selected = None
-
-    def key_pressed_handler(self, event: pygame.event.Event):
-        if not self.promotion_flag:
-            return
-
-        key = chr(event.key)
-
-        match key:
-            case "q":
-                piece = "queen"
-
-            case "r":
-                piece = "rook"
-
-            case "b":
-                piece = "bishop"
-
-            case "n":
-                piece = "knight"
-
-            case _:
-                return
-
-        new_piece = self.promote_piece(self.last_piece_moved, piece)
-        self.update_state()
-
-        self.last_piece_moved = new_piece
-        self.promotion_flag = False
 
     def promote_piece(self, piece: Piece, new_piece_name: str):
-        # Promotes a piece in place.
         color = piece.color
         position = piece.current_position
         scale = self.piece_scale
@@ -439,7 +313,6 @@ class Board:
     def move_piece(self, tile, piece: Piece):
         tiles = self.tiles
         piece.current_position = tile.position
-        piece.rect.center = tile.cartesian_coordinates
         tile_axial = position_to_axial(tile.position)
 
         if tile.piece is not None:
@@ -458,6 +331,11 @@ class Board:
                     if pawn_tile.piece.color != piece.color and pawn_tile.piece.name == "pawn":
                         self.remove_piece(pawn_tile.piece)
                         pawn_tile.piece = None
+
+            axial = position_to_axial(piece.current_position)
+            axial.r = axial.r - 1
+            if self.tiles.get(axial.to_string()) is None:
+                self.promote_pawn()
 
         tile.piece = piece
 
@@ -520,8 +398,6 @@ class Board:
 
             self.move_piece(new_tile, piece)
             piece.previous_position = piece.current_position
-            if move != state[-1]:
-                self.reset_highlighted_tiles()
 
     def update_state(self):
         if self.last_piece_moved is None:
@@ -529,6 +405,9 @@ class Board:
 
         notation = self.get_iccf_notation(self.last_piece_moved)
         self.state.append(notation)
+
+        if self.client is not None:
+            self.client.send_list(self.state)
 
     def get_iccf_notation(self, piece) -> str:
         if piece.current_position == piece.previous_position:
@@ -558,18 +437,14 @@ class Board:
 
     def reset_board(self):
         self.game_over = False
-        self.event_handlers: list[EventHandler] | None = None
         self.tile_height = None
         self.tile_width = None
-        self.pieces: list[Piece] | None = None
-        self.sprites = None
-        self.tiles: dict[str, Tile] | None = None
+        self.pieces = None
+        self.tiles = None
         self.center = None
-        self.piece_selected: Piece | None = None
-        self.last_piece_moved: Piece | None = None
+        self.last_piece_moved = None
         self.midY = None
         self.promotion_flag = False
-        self.highlighted_tiles = []
         self.in_check = False
 
         self.turn = 1
@@ -578,13 +453,33 @@ class Board:
 
         self.start_game()
 
+    def remove_piece(self, piece: Piece):
+        self.pieces.remove(piece)
+
+        for tile in self.tiles.values():
+            if tile.piece == piece:
+                tile.piece = None
+                break
+
+    def promote_pawn(self):
+        self.promotion_flag = True
+
+
+class PygameBoard:
+    def __init__(self, board: Board, surface: pygame.Surface):
+        self.board = board
+
+        self.surface = surface
+
+        self.event_handlers: list[EventHandler] | None = None
+        self.piece_selected: Piece | None = None
+        self.legal_moves: list[Tile] = []
 
     def update(self, events: list[pygame.event.Event]) -> None:
-        if self.game_over:
-            # return
+        if self.board.game_over:
             self.reset_board()
 
-        if self.promotion_flag:
+        if self.board.promotion_flag:
             for event in events:
                 if event.type == KEYDOWN:
                     self.key_pressed_handler(event)
@@ -595,24 +490,141 @@ class Board:
                         event_handler.event_triggered(event)
                         break
 
-        if self.sprites is not None:
-            self.sprites.update(self.tiles)
+        if self.board.pieces is not None:
+            # noinspection PyTypeChecker
+            pieces: list[PygamePiece] = self.board.pieces
+            sprites = pygame.sprite.Group(pieces)
+            sprites.update(self.board.tiles)
             self.update_board()
-            self.sprites.draw(self.surface)
+            sprites.draw(self.surface)
         else:
             self.update_board()
 
-    def remove_piece(self, piece: Piece):
-        self.pieces.remove(piece)
-        self.sprites.remove(piece)
+    def update_board(self):
+        # Precondition is that the tiles that are legal moves should already have color filter
+        # applied
+        if self.board.tiles is None:
+            return
 
-        for tile in self.tiles.values():
-            if tile.piece == piece:
-                tile.piece = None
-                break
+        for tile in self.board.tiles.values():
+            tile.draw_tile(self.surface)
 
-    def promote_pawn(self):
-        self.promotion_flag = True
+    def start_game(self):
+        self.board.start_game()
+
+        new_pieces = []
+        for piece in self.board.pieces:
+            new_pieces.append(PygamePiece(piece, self.board.piece_scale))
+
+        self.board.pieces = new_pieces
+        self.add_event_handlers()
+
+    def reset_board(self):
+        self.board.reset_board()
+        self.event_handlers = None
+        self.piece_selected = None
+        self.legal_moves = []
+
+        self.start_game()
+
+    def generate_blank_board(self):
+        self.board.generate_blank_board()
+
+        for tile in self.board.tiles:
+            tile.draw_tile(self.surface)
+
+    def key_pressed_handler(self, event: pygame.event.Event):
+        if not self.board.promotion_flag:
+            return
+
+        key = chr(event.key)
+
+        match key:
+            case "q":
+                piece = "queen"
+
+            case "r":
+                piece = "rook"
+
+            case "b":
+                piece = "bishop"
+
+            case "n":
+                piece = "knight"
+
+            case _:
+                return
+
+        new_piece = self.board.promote_piece(self.board.last_piece_moved, piece)
+        self.board.update_state()
+
+        self.board.last_piece_moved = new_piece
+        self.board.promotion_flag = False
+
+    def mouse_button_up_handler(self, event: pygame.event.Event):
+        if self.piece_selected is not None:
+            for piece in self.board.pieces:
+                self.board.legal_moves = self.legal_moves
+                valid_move = piece.mouse_button_up_handler(event)
+                if valid_move:
+                    break
+
+            for tile in self.board.tiles.values():
+                tile.reset_filter()
+
+            if self.board.in_check:
+                self.board.highlight_king_tile()
+
+            self.piece_selected = None
+
+    def mouse_button_down_handler(self, event: pygame.event.Event):
+        if self.board.pieces is None:
+            return
+
+        if self.piece_selected is None:
+            for piece in self.board.pieces:
+                if not self.board.test_mode:
+                    if piece.color != self.board.turn:
+                        continue
+
+                self.piece_selected = piece.mouse_button_down_handler(event)
+
+                if self.piece_selected is not None:
+                    self.highlight_legal_moves()
+                    break
+
+    def highlight_legal_moves(self):
+        legal_moves = self.piece_selected.get_piece_moves(self.board.tiles)
+
+        for tile in legal_moves:
+            highlight = self.board.settings.highlight
+
+            new_color = (utilities.clamp(highlight[0], tile.color.r, 255),
+                         utilities.clamp(highlight[1], tile.color.g, 255),
+                         utilities.clamp(highlight[2], tile.color.b, 255))
+
+            tile.apply_filter(pygame.color.Color(new_color[0], new_color[1], new_color[2]))
+
+        current_tile = self.board.tiles.get(position_to_axial(self.piece_selected.current_position).to_string())
+        current_tile.piece = self.piece_selected
+
+        current_color = (utilities.clamp(100, current_tile.color.r, 255),
+                         utilities.clamp(-60, current_tile.color.g, 255),
+                         utilities.clamp(-60, current_tile.color.b, 255))
+
+        current_tile.apply_filter(pygame.color.Color(current_color[0], current_color[1], current_color[2]))
+
+        self.legal_moves = legal_moves
+
+    def add_event_handlers(self):
+        self.event_handlers = [
+            EventHandler(MOUSEBUTTONDOWN, []),
+            EventHandler(MOUSEBUTTONUP, []),
+            EventHandler(KEYDOWN, [])
+        ]
+
+        for handler in self.event_handlers:
+            handler.add_subscriber(self, 0.025)
 
 
 class Tile:

@@ -1,6 +1,7 @@
 import os
 import pygame
 import pickle
+import re
 from PIL import Image
 from math import cos, sin, pi, sqrt
 
@@ -96,3 +97,15 @@ def load_object(file_name: str) -> object | None:
             return pickle.load(file)
     except FileNotFoundError:
         return None
+
+
+def is_valid_ip(ip: str):
+    ip_pattern = r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$'
+
+    if re.match(ip_pattern, ip):
+        segments = ip.split('.')
+        for segment in segments:
+            if not 0 <= int(segment) <= 255:
+                return False
+        return True
+    return False

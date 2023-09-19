@@ -137,3 +137,31 @@ class RGBPicker:
                          clamp(int(self.color[2]), 0, 0, 255))
             pygame.draw.rect(screen, pygame.Color(new_color), color_preview_rect)
             pygame.draw.rect(screen, (0, 0, 0), color_preview_rect, 2)
+
+
+class TextEntry:
+    def __init__(self, x, y, width, height, text=""):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.active = False
+        self.text = text
+
+    def handle_event(self, event: pygame.event.Event):
+        if self.active:
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    self.active = False
+                elif event.key == pygame.K_BACKSPACE:
+                    self.text = self.text[:-1]
+                else:
+                    self.text += event.unicode
+
+    def draw(self, screen: pygame.Surface, font: pygame.font.Font, background_color: pygame.Color, text_color: pygame.Color):
+        pygame.draw.rect(screen, background_color, self.rect)
+        pygame.draw.rect(screen, (0, 0, 0), self.rect, 2)
+
+        if self.active:
+            pygame.draw.line(screen, (0, 0, 0), (self.rect.x + 10, self.rect.centery + 10),
+                             (self.rect.x + 10 + font.size(self.text)[0], self.rect.centery + 10), 2)
+
+        text_surface = font.render(self.text, True, text_color)
+        screen.blit(text_surface, (self.rect.x + 10, self.rect.y + 15))

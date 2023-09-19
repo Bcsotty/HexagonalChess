@@ -2,8 +2,12 @@ import socket
 import threading
 import sys
 import pickle
+from sqlite3 import connect
+import pygame
+
 from src.network.database import Database
 from src.chess.board import Board
+from src.tools.settings import Settings
 
 
 white_turn = threading.Event()
@@ -19,6 +23,8 @@ def client_thread(client_socket: socket.SocketType, client_number: int, client_n
         if (white_turn.is_set() and client_number == 1) or (not white_turn.is_set() and client_number == 2):
             new_state = client_socket.recv(4096)
             new_state_array = pickle.loads(new_state)
+
+            print(f'Received new state from client: {new_state_array}')
             if white_turn.is_set():
                 white_turn.clear()
             else:
@@ -63,11 +69,12 @@ def main() -> None:
 
     database = Database()
     settings = Settings("settings.pkl")
-    board = Board(None, settings)
+    pygame.display.init()
+    board = Board(pygame.Surface((0, 0)), settings)
 
     try:
         while True:
-
+            # board.reset_board()
             print("Server is listening for clients...")
 
             for client_number in range(1, 3):
@@ -75,9 +82,11 @@ def main() -> None:
                 print(f"Client {client_number} connected from {client_address}. Waiting for clients name...")
 
                 name = client_socket.recv(1024).decode('utf-8')
+                print(f"Clients name is {name}")
                 player = database.get_player_from_name(name)
                 if player is None:
-                    database.add_player(name, client_address)
+                    print("Player not in database. Adding player")
+                    database.add_player(name, client_address[0])
 
                 color = '1' if client_number == 1 else '0'
                 client_socket.sendall(color.encode())
@@ -101,3 +110,4 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
+    pygame.quit()

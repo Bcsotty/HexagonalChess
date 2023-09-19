@@ -3,11 +3,12 @@ from pygame.locals import *
 import sys
 from math import sqrt
 import time
+import threading
 
 from src.chess.piece import create_piece
-from src.tools.utilities import clamp
-from src.chess.board import Board, Tile
-from src.tools.components import Button, Label, Dropdown, RGBPicker
+from src.tools.utilities import clamp, is_valid_ip
+from src.chess.board import Board, PygameBoard, Tile
+from src.tools.components import Button, Label, Dropdown, RGBPicker, TextEntry
 from src.tools.settings import Settings
 from src.tools.axial import pixel_to_axial
 from src.network.client import Client
@@ -32,12 +33,14 @@ def main_menu() -> None:
     y = settings.dimensions[1] / (5 + 1 / 3)
     text_width = 200
 
+    y_difference = int(15 / 96 * settings.dimensions[0])
+
     buttons = [
         Button(x, y, text_width, 50, "Play Local"),
-        Button(x, y + 125, text_width, 50, "Play Multiplayer"),
-        Button(x, y + 250, text_width, 50, "Test Mode"),
-        Button(x, y + 375, text_width, 50, "Settings"),
-        Button(x, y + 500, text_width, 50, "Quit Game"),
+        Button(x, y + y_difference, text_width, 50, "Play Multiplayer"),
+        Button(x, y + y_difference * 2, text_width, 50, "Test Mode"),
+        Button(x, y + y_difference * 3, text_width, 50, "Settings"),
+        Button(x, y + y_difference * 4, text_width, 50, "Quit Game"),
     ]
     title = Label(x, 25, text_width, 50, "Hexagonal Chess")
 
@@ -58,12 +61,17 @@ def main_menu() -> None:
                                 settings_changed = settings_menu(screen, settings)
 
                                 if settings_changed:
+                                    title_font_size = int(settings.dimensions[1] / 100) * 8
+                                    button_font = pygame.font.Font(None, title_font_size // 2)
+                                    title_font = pygame.font.Font(None, title_font_size)
+
                                     x = settings.dimensions[0] / 2 - 100
                                     y = settings.dimensions[1] / (5 + 1 / 3)
+                                    y_difference = int(15 / 96 * settings.dimensions[0])
 
                                     for i, component in enumerate(buttons):
                                         component.rect.x = x
-                                        component.rect.y = y + 125 * i
+                                        component.rect.y = y + y_difference * i
 
                                     title.rect.x = x
 
@@ -72,9 +80,9 @@ def main_menu() -> None:
                             case "Test Mode":
                                 test_mode(settings)
                             case "Play Multiplayer":
-                                connect_server_menu(settings)
-
-
+                                client = connect_server_menu(screen, settings)
+                                if client is not None:
+                                    game_loop(settings, client)
 
         screen.fill(pygame.Color('grey'))
 
@@ -86,27 +94,119 @@ def main_menu() -> None:
         pygame.display.flip()
 
 
-def connect_server_menu(settings: Settings):
-    pass
+def connect_server_menu(screen: pygame.surface.Surface, settings: Settings) -> Client | None:
+    current_dimensions = settings.dimensions
+
+    menu_label = Label(current_dimensions[0] / 2 - 100, 0, 200, 100, "Connect to a server")
+
+    ip_label = Label(current_dimensions[0] / 2 - 300, current_dimensions[1] / 2, 200, 50, "IP:")
+    ip_input = TextEntry(current_dimensions[0] / 2 - 100, current_dimensions[1] / 2, 200, 50)
+
+    port_label = Label(current_dimensions[0] / 2 - 300, current_dimensions[1] / 2 + 50, 200, 50, "Port:")
+    port_input = TextEntry(current_dimensions[0] / 2 - 100, current_dimensions[1] / 2 + 50, 200, 50)
+
+    error_label = Label(current_dimensions[0] / 2 - 200, current_dimensions[1] / 2 - 50, 200, 50, "")
+
+    buttons = [
+        Button(current_dimensions[0] / 2 + 25, current_dimensions[1] - 60, 200, 50,
+               "Connect"),
+        Button(current_dimensions[0] / 2 - 225, current_dimensions[1] - 60, 200, 50,
+               "Cancel")
+    ]
+
+    labels = [ip_label, port_label]
+    inputs = [ip_input, port_input]
+
+    menu_font = pygame.font.Font(None, 48)
+    font = pygame.font.Font(None, 32)
+
+    client = Client()
+
+    while True:
+        events = pygame.event.get()
+        for event in events:
+            if event.type == QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == MOUSEBUTTONDOWN and event.button == 1:
+                mouse_pos = pygame.mouse.get_pos()
+
+                for button in buttons:
+                    if button.is_clicked(mouse_pos):
+                        match button.text:
+                            case "Connect":
+                                ip = ip_input.text
+
+                                if not is_valid_ip(ip):
+                                    error_label.text = "Invalid IP"
+                                    continue
+                                else:
+                                    try:
+                                        port = int(port_input.text)
+                                    except ValueError:
+                                        error_label.text = "Invalid Port"
+                                        continue
+
+                                    connected = client.connect(ip, port)
+                                    if not connected:
+                                        error_label.text = "Connection failed"
+                                        continue
+                                    else:
+                                        return client
+                            case "Cancel":
+                                return None
+
+                for text_entry in inputs:
+                    text_entry.active = False
+
+                    if text_entry.rect.collidepoint(mouse_pos):
+                        text_entry.active = True
+            elif event.type == KEYDOWN:
+                for text_entry in inputs:
+                    text_entry.handle_event(event)
+
+
+        screen.fill(pygame.Color("grey"))
+
+        menu_label.draw(screen, menu_font, settings.text_color)
+        error_label.draw(screen, font, pygame.Color('red'))
+        for label in labels:
+            label.draw(screen, font, settings.text_color)
+
+        for text_entry in inputs:
+            text_entry.draw(screen, font, pygame.Color('grey'), settings.text_color)
+
+        for button in buttons:
+            button.draw(screen, font, settings.text_color)
+
+        pygame.display.flip()
 
 
 def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
     current_dimensions = settings.dimensions
     str_dimensions = str(current_dimensions[0]) + "x" + str(current_dimensions[1])
 
-    dropdown = Dropdown(current_dimensions[0] / 2 - 50, 0, 200, 50, ["600x600", "700x700","800x800"])
+    dropdown = Dropdown(current_dimensions[0] / 2 - 50, 0, 200, current_dimensions[0] * 50 / 800,
+                        ["600x600", "700x700","800x800"])
     dropdown.select_option(str_dimensions)
 
     dropdown_label = Label(current_dimensions[0] / 2 - 200, 0, 100, 50, "Window Size")
     font = pygame.font.Font(None, int(current_dimensions[1] / 100) * 8 // 2)
 
-    highlight_color_label = Label(current_dimensions[0] / 2 - 116, 175,
+    highlight_color_label = Label(current_dimensions[0] / 2 - 116, int(3 / 10 * current_dimensions[1] - 65) ,
                         200, 100, "Tile highlight settings (RGB, from -255 to 255)")
-    highlight_rgb_picker = RGBPicker(current_dimensions[0] / 2 - 150, 250, 255, 50, settings.highlight,
-                                     -255)
+    highlight_rgb_picker = RGBPicker(current_dimensions[0] / 2 - 150, int(3 / 10 * current_dimensions[1] + 10),
+                                     255, 50, settings.highlight, -255)
 
-    text_color_label = Label(current_dimensions[0] / 2 - 150, 310, 200, 100, "Text Color")
-    text_rgb_picker = RGBPicker(current_dimensions[0] / 2 - 150, 385, 255, 50, settings.text_color)
+    text_color_label = Label(current_dimensions[0] / 2 - 200, int(3 / 10 * current_dimensions[1] + 70),
+                             200, 100, "Text Color")
+    text_rgb_picker = RGBPicker(current_dimensions[0] / 2 - 150, int(3 / 10 * current_dimensions[1] + 145),
+                                255, 50, settings.text_color)
+
+    player_name_label = Label(current_dimensions[0] / 2 - 200, int(3 / 10 * current_dimensions[1] + 215),
+                              200, 40, "Player Name")
+    player_name_entry = TextEntry(current_dimensions[0] / 2 - 150, int(3 / 10 * current_dimensions[1] + 245),
+                                  200, 50, settings.name)
 
     colors = {
         0: pygame.Color(255, 206, 158),
@@ -131,9 +231,9 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
         sample_tiles.append(Tile(colors.get(i % 3), str(i), (x, y), size))
 
     buttons = [
-        Button(current_dimensions[0] / 2 + 25, current_dimensions[1] - 100, 200, 50,
+        Button(current_dimensions[0] / 2 + 25, current_dimensions[1] - 60, 200, 50,
                              "Save settings"),
-        Button(current_dimensions[0] / 2 - 225, current_dimensions[1] - 100, 200, 50,
+        Button(current_dimensions[0] / 2 - 225, current_dimensions[1] - 60, 200, 50,
                                "Cancel changes")
     ]
 
@@ -174,9 +274,12 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
                                 text_rgb_picker.update_color()
                                 new_text_color = text_rgb_picker.color
 
+                                new_name = player_name_entry.text
+
                                 settings.highlight = new_highlight
                                 settings.dimensions = new_dimensions
                                 settings.text_color = new_text_color
+                                settings.name = new_name
                                 pygame.display.set_mode(new_dimensions)
 
                                 settings.save_settings()
@@ -189,11 +292,16 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
                         dragging_slider = slider
                         slider.update_value(mouse_pos[0])
 
+                if player_name_entry.rect.collidepoint(mouse_pos):
+                    player_name_entry.active = True
+
             elif event.type == MOUSEBUTTONUP and event.button == 1:
                 dragging_slider = None
             elif event.type == MOUSEMOTION and dragging_slider:
                 mouse_pos = pygame.mouse.get_pos()
                 dragging_slider.update_value(mouse_pos[0])
+            elif event.type == KEYDOWN:
+                player_name_entry.handle_event(event)
 
 
         screen.fill(pygame.Color("grey"))
@@ -208,6 +316,8 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
         highlight_rgb_picker.draw(screen, font, pygame.Color('grey'), pygame.Color('white'))
         text_color_label.draw(screen, font, pygame.Color(text_rgb_picker.color))
         text_rgb_picker.draw(screen, font, pygame.Color('grey'), pygame.Color('white'))
+        player_name_label.draw(screen, font, pygame.Color(text_rgb_picker.color))
+        player_name_entry.draw(screen, font, pygame.Color('grey'), pygame.Color(text_rgb_picker.color))
 
         for tile in sample_tiles:
             tile.draw_tile(screen)
@@ -225,7 +335,15 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
         pygame.display.flip()
 
 
-def game_loop(settings: Settings, client=None) -> None:
+def client_thread(state: list, client: Client, running: threading.Event):
+    while running.is_set():
+        new_state = client.recv_list()
+        if new_state is not None:
+            state.clear()
+            state.extend(new_state)
+
+
+def game_loop(settings: Settings, client: Client = None) -> None:
     """
     Main game loop
 
@@ -235,13 +353,19 @@ def game_loop(settings: Settings, client=None) -> None:
     screen = pygame.display.set_mode(settings.dimensions)
     clock = pygame.time.Clock()
 
-    board = Board(screen, settings)
+    board = Board(screen, settings, client)
     board.start_game()
+    state = []
 
-    sample_state = ['09010703', '06070606', '07040706', '06060705', '07030705', '07070706', '07050706', '07100808',
-                    '05040506', '04070406', '06030504', '03080707', '05010204', '02070206', '02040510', '02060205',
-                    '05100409', '03070306', '04090611', '03060305']  # , '06110610'
-    board.load_state(sample_state)
+    player = 1
+    thread = None
+    running = threading.Event()
+    running.set()
+    if client is not None:
+        client.send_str(settings.name)
+        player = int(client.recv_str())
+        thread = threading.Thread(target=client_thread, args=(state, client, running))
+        thread.start()
 
     font = pygame.font.Font(None, 36)
     turn_label = Label(settings.dimensions[0] / 2 - 112, 0, 200, 50, "White's turn")
@@ -256,11 +380,19 @@ def game_loop(settings: Settings, client=None) -> None:
 
     try:
         while True:
+            if len(state) != 0:
+                board.reset_board()
+                board.load_state(state)
+                state.clear()
+
             events = pygame.event.get()
             for event in events:
                 if event.type == QUIT:
                     print(board.state)
                     pygame.quit()
+                    running.clear()
+                    if thread is not None:
+                        thread.join()
                     sys.exit()
 
             screen.fill(pygame.Color('grey'))
@@ -271,7 +403,11 @@ def game_loop(settings: Settings, client=None) -> None:
                 for label in promotion_labels:
                     label.draw(screen, font, settings.text_color)
 
-            board.update(events)
+            if client is None:
+                board.update(events)
+            else:
+                if player == board.turn:
+                    board.update(events)
 
             if board.turn == 0:
                 turn_label.set_text("Black's turn")
@@ -279,9 +415,10 @@ def game_loop(settings: Settings, client=None) -> None:
                 turn_label.set_text("White's turn")
 
             if board.game_over:
-                # Replace bool with whether we win according to the last piece played color being ours or enemy
-                if board.last_piece_moved.color == client
-                game_over_screen(True, settings)
+                winner = board.last_piece_moved.color == player
+                if thread is not None:
+                    thread.join(1)
+                game_over_screen(winner, settings)
                 break
 
             pygame.display.flip()
@@ -294,11 +431,10 @@ def game_loop(settings: Settings, client=None) -> None:
 def test_mode(settings: Settings) -> None:
     screen = pygame.display.set_mode(settings.dimensions)
 
-    board = Board(screen, settings, True)
+    board = Board(settings, None, True)
+    pygame_board = PygameBoard(board, screen)
 
-    board.generate_blank_board()
-
-    board.add_event_handlers()
+    pygame_board.start_game()
 
     promotion_labels = [
         Label(settings.dimensions[0] * 3 / 4 - 100, 0, 200, 50, "Choose a piece:"),
@@ -317,6 +453,7 @@ def test_mode(settings: Settings) -> None:
 
         for event in events:
             if event.type == QUIT:
+                print(board.state)
                 pygame.quit()
                 sys.exit()
 
@@ -370,15 +507,15 @@ def test_mode(settings: Settings) -> None:
             game_over_screen(True, settings)
             break
 
-        board.update(events)
+        pygame_board.update(events)
         pygame.display.flip()
 
 
-def game_over_screen(is_winner: bool, settings: Settings):
+def game_over_screen(winner: bool, settings: Settings):
     screen = pygame.display.set_mode(settings.dimensions)
 
-    if is_winner:
-        text = "You win!"
+    if winner:
+        text = "You won!"
     else:
         text = "You lost..."
 
@@ -419,8 +556,11 @@ if __name__ == '__main__':
 
 '''
 TODO
- - Add some form of notation to the board with save and load methods for placing the the pieces.
- 
+
+Server and client fully implemented but I need to decouple the Pygame from the Board and Piece class, and instead add a 
+wrapper class or method that will accept a Board/Piece object and perform the Pygame related operations on it. This allows
+me to create boards/pieces that aren't reliant on pygame and can be used without it. This fixes the server issue where
+it will fail to start the game.
  - Add server and client.
    - Server stores client information, the IP gets mapped to the users name in the settings. If left as default, then
    auto-assign the name of the IP. The server would tell each client what color it is, and when the client sends their

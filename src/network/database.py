@@ -3,6 +3,7 @@ from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.ext.declarative import declarative_base
 from time import time
 import os
+import sqlite3
 
 
 Base = declarative_base()
@@ -32,6 +33,7 @@ class PlayedGames(Base):
 class Database:
     def __init__(self):
         root_dir = os.path.dirname(os.path.abspath(__file__))
+
         if not os.path.exists(root_dir + '\\chess_database.db'):
             create_database()
 
@@ -160,7 +162,8 @@ def create_database():
         """
     ]
 
-    conn = sqlite3.connect('network/chess_database.db')
+    root_dir = os.path.dirname(os.path.abspath(__file__))
+    conn = sqlite3.connect(root_dir + '\\' +'chess_database.db')
     cursor = conn.cursor()
 
     for command in sql_commands:

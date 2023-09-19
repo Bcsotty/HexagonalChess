@@ -8,6 +8,7 @@ class Settings:
         self.dimensions = (800, 800)
         self.highlight = (-217, -55, -7)
         self.text_color = (38, 28, 55)
+        self.name = ""
         self.root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.load_settings()
 

@@ -20,70 +20,25 @@ positions = {
 }
 
 
-class Piece(pygame.sprite.Sprite, ABC):
+class Piece(ABC):
     """
 
     Piece sprite
 
     """
 
-    def __init__(self, color: int, piece: str, position: str, board, scale=1.0):
+    def __init__(self, color: int, piece: str, position: str, board):
         """
         :param color: Color of the piece. 0 for black, 1 for white
         :param piece: The piece name
         :param position: The rank and file to be placed at. (a7, f2, etc.)
         """
 
-        super().__init__()
-
-        self.image = get_piece_image(color, piece, scale)
         self.name = piece
         self.color = color
         self.current_position = position
         self.previous_position = position
-        self.rect = self.image.get_rect()
-        self.rect.center = position_to_cartesian(board, position)
-        self.dragging = False
         self.board = board
-
-    def update(self, tiles: dict):
-        if self.dragging:
-            self.rect.center = pygame.mouse.get_pos()
-
-            for axial, tile in tiles.items():
-                if pixel_to_axial(self.board, self.rect.center) == axial:
-                    self.current_position = tile.position
-                    break
-
-    def mouse_button_down_handler(self, event: pygame.event.Event):
-        if self.rect.collidepoint(event.pos):
-            self.previous_position = self.current_position
-            self.dragging = True
-            return self
-
-    def mouse_button_up_handler(self, event: pygame.event.Event) -> bool:
-        tiles = self.board.tiles
-
-        if self.dragging:
-            found_tile = None
-
-            for tile_axial, tile in tiles.items():
-                if (pixel_to_axial(self.board, self.rect.center).to_string() == tile_axial and
-                        (tile in self.board.highlighted_tiles or self.board.test_mode) and
-                        tile.position != self.previous_position):
-
-                    self.board.move_piece(tile, self)
-                    found_tile = True
-                    break
-
-            if not found_tile:
-                self.current_position = self.previous_position
-                self.rect.center = position_to_cartesian(self.board, self.current_position)
-
-            self.dragging = False
-            return found_tile
-
-        return False
 
     def is_legal_move(self, tile) -> bool:
         # Check if the piece (self) moving to the tile is a legal move (moving piece doesn't put our king in check)
@@ -93,10 +48,8 @@ class Piece(pygame.sprite.Sprite, ABC):
         return True
 
     def configure_copy(self, piece_copy):
-        piece_copy.dragging = copy(self.dragging)
         piece_copy.previous_position = copy(self.previous_position)
         piece_copy.current_position = copy(self.current_position)
-        piece_copy.rect = copy(self.rect)
         return piece_copy
 
     @abstractmethod
@@ -111,7 +64,7 @@ class Piece(pygame.sprite.Sprite, ABC):
 
 class Pawn(Piece):
     def __init__(self, color: int, position: str, board, scale=1.0):
-        super().__init__(color, "pawn", position, board, scale)
+        super().__init__(color, "pawn", position, board)
         self.en_passant_possible = False
 
     def get_piece_moves(self, tiles: dict) -> list:
@@ -176,17 +129,6 @@ class Pawn(Piece):
 
         return legal_moves
 
-    def mouse_button_up_handler(self, event: pygame.event.Event) -> bool:
-        valid_move = super().mouse_button_up_handler(event)
-
-        if valid_move:
-            axial = position_to_axial(self.current_position)
-            axial.r = axial.r - 1
-            if self.board.tiles.get(axial.to_string()) is None:
-                self.board.promote_pawn()
-
-        return valid_move
-
     def __deepcopy__(self, memodict=None, piece_copy=None):
         if memodict is None:
             memodict = {}
@@ -199,7 +141,7 @@ class Pawn(Piece):
 
 class Queen(Piece):
     def __init__(self, color: int, position: str, board, scale=1.0):
-        super().__init__(color, "queen", position, board, scale)
+        super().__init__(color, "queen", position, board)
 
     def get_piece_moves(self, tiles: dict) -> list:
         legal_moves = []
@@ -261,7 +203,7 @@ class Queen(Piece):
 
 class King(Piece):
     def __init__(self, color: int, position: str, board, scale=1.0):
-        super().__init__(color, "king", position, board, scale)
+        super().__init__(color, "king", position, board)
 
     def get_piece_moves(self, tiles: dict) -> list:
         legal_moves = []
@@ -320,7 +262,7 @@ class King(Piece):
 
 class Rook(Piece):
     def __init__(self, color: int, position: str, board, scale=1.0):
-        super().__init__(color, "rook", position, board, scale)
+        super().__init__(color, "rook", position, board)
 
     def get_piece_moves(self, tiles: dict) -> list:
         legal_moves = []
@@ -376,7 +318,7 @@ class Rook(Piece):
 
 class Knight(Piece):
     def __init__(self, color: int, position: str, board, scale=1.0):
-        super().__init__(color, "knight", position, board, scale)
+        super().__init__(color, "knight", position, board)
 
     def get_piece_moves(self, tiles: dict) -> list:
         legal_moves = []
@@ -435,7 +377,7 @@ class Knight(Piece):
 
 class Bishop(Piece):
     def __init__(self, color: int, position: str, board, scale=1.0):
-        super().__init__(color, "bishop", position, board, scale)
+        super().__init__(color, "bishop", position, board)
 
     def get_piece_moves(self, tiles: dict) -> list:
         legal_moves = []
@@ -487,6 +429,59 @@ class Bishop(Piece):
         piece_copy = Bishop(copy(self.color), copy(self.current_position), self.board, self.board.piece_scale)
 
         return super().configure_copy(piece_copy=piece_copy)
+
+
+class PygamePiece(pygame.sprite.Sprite):
+    def __init__(self, piece: Piece, scale=1.0):
+        super().__init__()
+
+        self.piece = piece
+        self.image = get_piece_image(piece.color, piece.name, scale)
+        self.rect = self.image.get_rect()
+        self.rect.center = position_to_cartesian(piece.board, piece.current_position)
+        self.dragging = False
+
+    def update(self, tiles: dict):
+        if self.dragging:
+            self.rect.center = pygame.mouse.get_pos()
+
+            for axial, tile in tiles.items():
+                if pixel_to_axial(self.piece.board, self.rect.center) == axial:
+                    self.piece.current_position = tile.position
+                    break
+
+    def mouse_button_down_handler(self, event: pygame.event.Event):
+        if self.rect.collidepoint(event.pos):
+            self.piece.previous_position = self.piece.current_position
+            self.dragging = True
+            return self.piece
+
+    def mouse_button_up_handler(self, event: pygame.event.Event) -> bool:
+        board = self.piece.board
+        tiles = board.tiles
+
+        if self.dragging:
+            found_tile = None
+
+            for tile_axial, tile in tiles.items():
+                if (pixel_to_axial(board, self.rect.center).to_string() == tile_axial and
+                        (tile in board.legal_moves or board.test_mode) and
+                        tile.position != self.piece.previous_position):
+
+
+                    board.move_piece(tile, self.piece)
+                    self.rect.center = tile.cartesian_coordinates
+                    found_tile = True
+                    break
+
+            if not found_tile:
+                self.piece.current_position = self.piece.previous_position
+                self.rect.center = position_to_cartesian(board, self.piece.current_position)
+
+            self.dragging = False
+            return found_tile
+
+        return False
 
 
 def create_default_pieces(color: int, board, scale=1.0) -> list[Piece]:
