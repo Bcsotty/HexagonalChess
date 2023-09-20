@@ -8,7 +8,7 @@ import time
 from piece import Piece, create_piece
 from utilities import draw_regular_polygon, clamp
 from board import Board, Tile
-from components import Button, Label, Dropdown, Slider
+from components import Button, Label, Dropdown, Slider, RGBPicker
 from settings import Settings
 from axial import Axial, axial_from_string, pixel_to_axial
 from event_handler import EventHandler
@@ -75,9 +75,9 @@ def main_menu() -> None:
         screen.fill(pygame.Color('grey'))
 
         for button in buttons:
-            button.draw(screen, button_font)
+            button.draw(screen, button_font, settings.text_color)
 
-        title.draw(screen, title_font, pygame.color.Color(38, 28, 55))
+        title.draw(screen, title_font, settings.text_color)
 
         pygame.display.flip()
 
@@ -92,13 +92,13 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
     dropdown_label = Label(current_dimensions[0] / 2 - 200, 0, 100, 50, "Window Size")
     font = pygame.font.Font(None, int(current_dimensions[1] / 100) * 8 // 2)
 
-    color_label = Label(current_dimensions[0] / 2 - 116, 200,
-                        100, 50, "Tile highlight settings (RGB)")
-    color_components = [
-        Slider(current_dimensions[0] / 2 - 150, 250, 255, -255, 255),
-        Slider(current_dimensions[0] / 2 - 150, 275, 255, -255, 255),
-        Slider(current_dimensions[0] / 2 - 150, 300, 255, -255, 255),
-    ]
+    highlight_color_label = Label(current_dimensions[0] / 2 - 116, 175,
+                        200, 100, "Tile highlight settings (RGB, from -255 to 255)")
+    highlight_rgb_picker = RGBPicker(current_dimensions[0] / 2 - 150, 250, 255, 50, settings.highlight,
+                                     -255)
+
+    text_color_label = Label(current_dimensions[0] / 2 - 150, 310, 200, 100, "Text Color")
+    text_rgb_picker = RGBPicker(current_dimensions[0] / 2 - 150, 385, 255, 50, settings.text_color)
 
     colors = {
         0: pygame.Color(255, 206, 158),
@@ -137,11 +137,6 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
 
     dragging_slider = None
 
-    highlight = settings.highlight
-
-    for i, component in enumerate(color_components):
-        component.set_value(highlight[i])
-
     while True:
         for event in pygame.event.get():
             if event.type == QUIT:
@@ -166,10 +161,14 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
                                 new_dimensions_str = dropdown.selected_option
                                 new_dimensions = (int(new_dimensions_str[:3]), int(new_dimensions_str[4:]))
 
-                                new_highlight = tuple(slider.value for slider in color_components)
+                                highlight_rgb_picker.update_color()
+                                new_highlight = highlight_rgb_picker.color
+                                text_rgb_picker.update_color()
+                                new_text_color = text_rgb_picker.color
 
                                 settings.highlight = new_highlight
                                 settings.dimensions = new_dimensions
+                                settings.text_color = new_text_color
                                 pygame.display.set_mode(new_dimensions)
 
                                 settings.save_settings()
@@ -177,7 +176,7 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
                             case "Cancel changes":
                                 return False
 
-                for slider in color_components:
+                for slider in highlight_rgb_picker.sliders + text_rgb_picker.sliders:
                     if slider.knob_rect.collidepoint(mouse_pos):
                         dragging_slider = slider
                         slider.update_value(mouse_pos[0])
@@ -190,15 +189,17 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
 
 
         screen.fill(pygame.Color("grey"))
-        dropdown_label.draw(screen, font, pygame.Color(38, 28, 55))
-        dropdown.draw(screen, font, pygame.Color(180, 180, 180), pygame.Color(38, 28, 55))
+        text_rgb_picker.update_color()
+        dropdown_label.draw(screen, font, pygame.Color(text_rgb_picker.color))
+        dropdown.draw(screen, font, pygame.Color(180, 180, 180), pygame.Color(text_rgb_picker.color))
 
         for button in buttons:
-            button.draw(screen, font)
+            button.draw(screen, font, pygame.Color(text_rgb_picker.color))
 
-        color_label.draw(screen, font, pygame.Color('black'))
-        for component in color_components:
-            component.draw(screen, font, pygame.Color('white'))
+        highlight_color_label.draw(screen, font, pygame.Color(text_rgb_picker.color))
+        highlight_rgb_picker.draw(screen, font, pygame.Color('grey'), pygame.Color('white'))
+        text_color_label.draw(screen, font, pygame.Color(text_rgb_picker.color))
+        text_rgb_picker.draw(screen, font, pygame.Color('grey'), pygame.Color('white'))
 
         for tile in sample_tiles:
             tile.draw_tile(screen)
@@ -206,7 +207,8 @@ def settings_menu(screen: pygame.surface.Surface, settings: Settings) -> bool:
             if tile == sample_tiles[-1]:
                 break
 
-            highlight = tuple(slider.value for slider in color_components)
+            highlight_rgb_picker.update_color()
+            highlight = highlight_rgb_picker.color
             new_color = (clamp(tile.color.r, highlight[0], 255),
                          clamp(tile.color.g, highlight[1], 255),
                          clamp(tile.color.b, highlight[2], 255))
@@ -239,32 +241,47 @@ def game_loop(settings: Settings) -> None:
     ]
 
     board.start_game()
+    # sample_state = ['09010703', '06070606', '07040706', '06060705', '07030705', '07070706', '07050706', '07100808',
+    #                 '05040506', '04070406', '06030504', '03080707', '05010204', '02070206', '02040510', '02060205',
+    #                 '05100409', '03070306', '04090611', '03060305', '06110610']
 
-    while True:
-        events = pygame.event.get()
-        for event in events:
-            if event.type == QUIT:
-                pygame.quit()
-                sys.exit()
+    # board.load_state(sample_state)
 
-        screen.fill(pygame.Color('grey'))
+    try:
+        while True:
+            events = pygame.event.get()
+            for event in events:
+                if event.type == QUIT:
+                    print(board.state)
+                    pygame.quit()
+                    sys.exit()
 
-        turn_label.draw(screen, font, pygame.Color('white'))
+            screen.fill(pygame.Color('grey'))
 
-        if board.promotion_flag:
-            for label in promotion_labels:
-                label.draw(screen, font, pygame.Color('black'))
+            turn_label.draw(screen, font, settings.text_color)
 
-        board.update(events)
+            if board.promotion_flag:
+                for label in promotion_labels:
+                    label.draw(screen, font, settings.text_color)
 
-        if board.turn == 0:
-            turn_label.set_text("Black's turn")
-        else:
-            turn_label.set_text("White's turn")
+            board.update(events)
 
-        pygame.display.flip()
+            if board.turn == 0:
+                turn_label.set_text("Black's turn")
+            else:
+                turn_label.set_text("White's turn")
 
-        clock.tick(60)
+            if board.game_over:
+                # Replace bool with whether we win according to the last piece played color being ours or enemy
+                game_over_screen(True, settings)
+                print(board.state)
+                break
+
+            pygame.display.flip()
+
+            clock.tick(60)
+    except ValueError:
+        print(board.state)
 
 
 def test_mode(settings: Settings) -> None:
@@ -339,9 +356,48 @@ def test_mode(settings: Settings) -> None:
 
         if board.promotion_flag:
             for label in promotion_labels:
-                label.draw(screen, font, pygame.Color('black'))
+                label.draw(screen, font, settings.text_color)
+
+        if board.game_over:
+            # Replace bool with whether we win according to the last piece played color being ours or enemy
+            game_over_screen(True, settings)
+            break
 
         board.update(events)
+        pygame.display.flip()
+
+
+def game_over_screen(is_winner: bool, settings: Settings):
+    screen = pygame.display.set_mode(settings.dimensions)
+
+    if is_winner:
+        text = "You win!"
+    else:
+        text = "You lost..."
+
+    font = pygame.font.Font(None, 36)
+
+    end_state = Label(settings.dimensions[0] / 2 - 50, 120, 100, 100, text)
+    main_menu_button = Button(settings.dimensions[0] / 2 - 100, settings.dimensions[1] - 200, 200, 50,
+                              "Main Menu")
+
+    running = True
+    while running:
+        events = pygame.event.get()
+        mouse_pos = pygame.mouse.get_pos()
+        for event in events:
+            if event.type == QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == MOUSEBUTTONDOWN and event.button == 1:
+                if main_menu_button.is_clicked(mouse_pos):
+                    running = False
+
+        screen.fill(pygame.Color('grey'))
+
+        end_state.draw(screen, font, settings.text_color)
+        main_menu_button.draw(screen, font, settings.text_color)
+
         pygame.display.flip()
 
 
@@ -356,5 +412,25 @@ if __name__ == '__main__':
 
 '''
 TODO
-
+ - Add some form of notation to the board with save and load methods for placing the the pieces.
+ 
+ - Add server and client.
+   - Server stores client information, the IP gets mapped to the users name in the settings. If left as default, then
+   auto-assign the name of the IP. The server would tell each client what color it is, and when the client sends their
+   board state (the current state in the notation) the server will save the state to logs, update the turn, then send 
+   the board state to the other client. The server should then check if the board state was terminal, and if so it will
+   close the connection to the clients.
+    - Optional features when closing connection could be sending the players match history W-L
+    
+   - Client will play the game. It will have the option to play local which is the default game we have made, then a 
+   second button will be on the main menu for multiplayer. Once the client clicks multiplayer, it will have an input for
+   an IP and a port, and a connect button. Once the user enters the IP and port, if it fails to connect it will display
+   a red label saying connection failed. If it does connect, it will instead get the players color from the server and 
+   orient the board accordingly. When its the players turn they can play their move and it will get sent to the server.
+   Once their turn is done, the client will wait for the server to respond with the next move and will display the other
+   players turn.
+ 
+ - Add which color you are to the game screen (Low priority since it makes no difference until multiplayer is implemented)
+ - Add the ability to see from black perspective (Low priority since moving works as is)
+ - Refactor the code (at the end)
 '''
