@@ -12,14 +12,14 @@ class Settings:
         self.load_settings()
 
     def load_settings(self):
-        previous_settings = load_object(self.root_dir + "\\" + self.file_path)
+        previous_settings = load_object(os.path.join(self.root_dir, self.file_path))
         if previous_settings is not None:
             self.__dict__.update(previous_settings.__dict__)
         else:
             self.load_default_settings()
 
     def load_default_settings(self):
-        default_settings = load_object(self.root_dir + "\default_settings.pkl")
+        default_settings = load_object(os.path.join(self.root_dir, "default_settings.pkl"))
         self.__dict__.update(default_settings.__dict__)
 
     def save_settings(self):
